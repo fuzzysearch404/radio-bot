@@ -311,6 +311,8 @@ class Music(commands.Cog):
         song_name = player.current.title
         if await self.bot.is_owner(ctx.author):
             await player.skip()
+        elif player.current.requester == ctx.author.id:
+            await player.skip()
         else:
             channel = self.bot.get_channel(int(player.channel_id))
             required = math.ceil((len(channel.members) - 1) / 2.5)
