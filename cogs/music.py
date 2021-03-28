@@ -300,7 +300,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['p'])
     async def play(self, ctx, *, query: str):
-        """ Meklē dziesmu un pieliek to atskaņošanas queue. """
+        """ Pasūtīt dziesmu radio """
         await self.do_play(ctx, query)
 
     async def do_skip(self, ctx):
@@ -348,7 +348,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['skipsong'])
     async def skip(self, ctx):
-        """ Skipot patreizējo dziesmu. """
+        """ Skipot patreizējo dziesmu """
         await self.do_skip(ctx)
 
     @commands.is_owner()
@@ -411,7 +411,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['q'])
     async def queue(self, ctx, page: int = 1):
-        """ Apskatīt nākošo dziesmu queue. """
+        """ Apskati pasūtītās dziesmas """
         await self.view_queue(ctx, page)
 
     async def find_songs(self, ctx, query):
@@ -436,7 +436,10 @@ class Music(commands.Cog):
         embed = discord.Embed(color=discord.Color.blurple(), description=o)
         await ctx.send(embed=embed)
 
-    @cog_ext.cog_slash(name="find", description="Atrodi dziesmas Youtubā")
+    @cog_ext.cog_slash(
+        name="find",
+        description="Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube"
+    )
     async def slash_find(self, ctx: SlashContext, dziesmas_nosaukums: str):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -445,7 +448,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def find(self, ctx, *, query):
-        """ Atrod un parāda 10 meklētās dziesmas rezultātus. """
+        """ Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube """
         await self.find_songs(ctx, query)
 
     @commands.is_owner()
@@ -482,7 +485,7 @@ class Music(commands.Cog):
                               title='Tagad skan', description=song)
         await ctx.send(embed=embed)
 
-    @cog_ext.cog_slash(name="now", description="Apskatīties kāda dziesma tagad skan")
+    @cog_ext.cog_slash(name="now", description="Parāda dziesmu, kas tiek pašlaik atskaņota")
     async def slash_now(self, ctx: SlashContext):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -491,8 +494,38 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['np', 'n', 'playing'])
     async def now(self, ctx):
-        """ Parāda tagad skanošo dziesmu. """
+        """ Parāda dziesmu, kas tiek pašlaik atskaņota """
         await self.view_now_playing(ctx)
+
+    async def delete_last_request(self, ctx):
+        player = self.bot.lavalink.player_manager.get(ctx.guild.id)
+
+        if not player.queue:
+            return await ctx.send("Queue ir jau pavisam tukšs")
+
+        try:
+            to_remove = next(x for x in reversed(player.queue) if x.requester == ctx.author.id)
+        except StopIteration:
+            return await ctx.send("Tu nemaz neesi pasūtījis nevienu dziesmu.")
+        
+        player.queue.remove(to_remove)
+
+        await ctx.send(f"Ok, izņēmu tavu pēdējo pasūtīto dziesmu **{to_remove.title}** no queue.")
+
+    @cog_ext.cog_slash(
+        name="remove",
+        description="Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue"
+    )
+    async def slash_remove(self, ctx: SlashContext):
+        if not await self.ensure_slash_voice(ctx):
+            return
+        
+        await self.delete_last_request(ctx)
+    
+    @commands.command()
+    async def remove(self, ctx):
+        """ Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue """
+        await self.delete_last_request(ctx)
 
     @commands.is_owner()
     @commands.command()
