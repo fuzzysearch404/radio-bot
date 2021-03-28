@@ -100,6 +100,7 @@ class Music(commands.Cog):
                     player.store(key='jingle', value=jingle_counter-1)
 
             if not player.is_connected:
+                print("Found that player is not connected. Trying to reconnect")
                 chan_id = player.fetch(key=f'chan:{player.guild_id}', default=0)
                 
                 if chan_id:
@@ -115,9 +116,11 @@ class Music(commands.Cog):
                     await guild.change_voice_state(channel=chan)
 
             if not player.is_playing and not player.paused:
+                print("Found that player is not playing. Trying to restart playback")
                 await player.play()
 
             if not player.current:
+                print("Found that player has no current track. Trying to skip")
                 await player.skip()
 
     @radio_loop.before_loop
@@ -187,6 +190,10 @@ class Music(commands.Cog):
 
     async def ensure_slash_voice(self, ctx):
         """ This check ensures that the bot and command author are in the same voicechannel. """
+        if not ctx.guild:
+            await ctx.send("Komandas var izmantot tikai serverī")
+            return False
+
         player = self.bot.lavalink.player_manager.create(ctx.guild.id, endpoint=str(ctx.guild.region))
         should_connect = ctx.name in ('play',)
 
