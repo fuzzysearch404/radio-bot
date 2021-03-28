@@ -169,16 +169,16 @@ class Music(commands.Cog):
             # Our cog_command_error handler catches this and sends it to the voicechannel.
             # Exceptions allow us to "short-circuit" command invocation via checks so the
             # execution state of the command goes no further.
-            raise commands.CommandInvokeError('Tu neesi nevienā voice channel')
+            raise commands.CommandInvokeError('\u274c Tu neesi nevienā voice channel')
 
         if not player.is_connected:
             if not should_connect:
-                raise commands.CommandInvokeError('Neesmu pieslēdzies.')
+                raise commands.CommandInvokeError('\u274c Neesmu pieslēdzies.')
 
             permissions = ctx.author.voice.channel.permissions_for(ctx.me)
 
             if not permissions.connect or not permissions.speak:  # Check user limit too?
-                raise commands.CommandInvokeError('Man vajag `CONNECT` un `SPEAK` permissions.')
+                raise commands.CommandInvokeError('\u274c Man vajag `CONNECT` un `SPEAK` permissions.')
 
             player.store('channel', ctx.channel.id)
             await ctx.guild.change_voice_state(channel=ctx.author.voice.channel)
@@ -186,30 +186,30 @@ class Music(commands.Cog):
             player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
             if int(player.channel_id) != ctx.author.voice.channel.id:
-                raise commands.CommandInvokeError('Tev vajag būt manā voice channel.')
+                raise commands.CommandInvokeError('\ud83e\udd21 Tev vajag būt manā voice channel.')
 
     async def ensure_slash_voice(self, ctx):
         """ This check ensures that the bot and command author are in the same voicechannel. """
         if not ctx.guild:
-            await ctx.send("Komandas var izmantot tikai serverī")
+            await ctx.send("\u274c Komandas var izmantot tikai serverī")
             return False
 
         player = self.bot.lavalink.player_manager.create(ctx.guild.id, endpoint=str(ctx.guild.region))
         should_connect = ctx.name in ('play',)
 
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await ctx.send('Tu neesi nevienā voice channel.', hidden=True)
+            await ctx.send('\u274c Tu neesi nevienā voice channel.', hidden=True)
             return False
 
         if not player.is_connected:
             if not should_connect:
-                await ctx.send('Neesmu pieslēdzies.', hidden=True)
+                await ctx.send('\u274c Neesmu pieslēdzies.', hidden=True)
                 return False
 
             permissions = ctx.author.voice.channel.permissions_for(ctx.guild.me)
 
             if not permissions.connect or not permissions.speak:  # Check user limit too?
-                await ctx.send('Man vajag `CONNECT` un `SPEAK` permissions.', hidden=True)
+                await ctx.send('\u274c Man vajag `CONNECT` un `SPEAK` permissions.', hidden=True)
                 return False
 
             player.store('channel', ctx.channel.id)
@@ -218,7 +218,7 @@ class Music(commands.Cog):
             player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
             if int(player.channel_id) != ctx.author.voice.channel.id:
-                await ctx.send('Tev vajag būt manā voice channel.', hidden=True)
+                await ctx.send('\ud83e\udd21 Tev vajag būt manā voice channel.', hidden=True)
                 return False
 
         return True
@@ -250,7 +250,7 @@ class Music(commands.Cog):
         # Results could be None if Lavalink returns an invalid response (non-JSON/non-200 (OK)).
         # ALternatively, resullts['tracks'] could be an empty array if the query yielded no tracks.
         if not results or not results['tracks']:
-            return await ctx.send('Neko neatradu!')
+            return await ctx.send('\u274c Neko neatradu!')
 
         embed = discord.Embed(color=discord.Color.blurple())
 
@@ -265,13 +265,13 @@ class Music(commands.Cog):
         elif results['loadType'] == 'SEARCH_RESULT':
             track = results['tracks'][0]
         else:
-            return await ctx.send("Nevaru atrast neko vai arī kaut kas nokāries, bruh.")
+            return await ctx.send("\u274c Nevaru atrast neko vai arī kaut kas nokāries, bruh.")
         
         if not await self.bot.is_owner(ctx.author):
             if track['info']['length'] > 600000:
-                return await ctx.send("Šī dziesma ir pārāk gara... (10mins max)")
+                return await ctx.send("\u23f0 Šī dziesma ir pārāk gara... (10mins max)")
 
-        embed.title = 'Dziesma pievienota queue!'
+        embed.title = '\u2705 Dziesma pievienota queue!'
         embed.description = f'[{track["info"]["title"]}]({track["info"]["uri"]})'
 
         player.add(requester=ctx.author.id, track=track)
@@ -291,7 +291,7 @@ class Music(commands.Cog):
         else:
             player.store(key='jingle', value=jingle_counter-1)
 
-    @cog_ext.cog_slash(name="play", description="Pasūtīt dziesmu radio")
+    @cog_ext.cog_slash(name="play", description="\u25b6\ufe0f Pasūtīt dziesmu radio")
     async def slash_play(self, ctx: SlashContext, dziesma: str):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -300,20 +300,11 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['p'])
     async def play(self, ctx, *, query: str):
-        """ Pasūtīt dziesmu radio """
+        """ \u25b6\ufe0f Pasūtīt dziesmu radio """
         await self.do_play(ctx, query)
 
     async def do_skip(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
-
-        if not player.is_connected:
-            # We can't disconnect, if we're not connected.
-            return await ctx.send('Neesmu pieslēdzies.')
-
-        if not ctx.author.voice or (player.is_connected and ctx.author.voice.channel.id != int(player.channel_id)):
-            # Abuse prevention. Users not in voice channels, or not in the same voice channel as the bot
-            # may not disconnect the bot.
-            return await ctx.send('Tev vajag būt manā voice channel!')
 
         song_name = player.current.title
         if await self.bot.is_owner(ctx.author):
@@ -335,11 +326,13 @@ class Music(commands.Cog):
             if votes >= required:
                 await player.skip()
             else:
-                return await ctx.send(f"`{ctx.author}`grib skipot šo dziesmu. Vēl nepieciešamas **{required - votes}** balsis!")
+                return await ctx.send(
+                    f"\u23e9\u2753 `{ctx.author}`grib skipot šo dziesmu. Vēl nepieciešamas **{required - votes}** balsis!"
+                )
 
-        await ctx.send(f"Skipojam **{song_name}**!")
+        await ctx.send(f"\u23e9 Skipojam **{song_name}**!")
 
-    @cog_ext.cog_slash(name="skip", description="Skipot patreizējo dziesmu")
+    @cog_ext.cog_slash(name="skip", description="\u23e9 Skipot patreizējo dziesmu")
     async def slash_skip(self, ctx: SlashContext):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -348,7 +341,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['skipsong'])
     async def skip(self, ctx):
-        """ Skipot patreizējo dziesmu """
+        """ \u23e9 Skipot patreizējo dziesmu """
         await self.do_skip(ctx)
 
     @commands.is_owner()
@@ -359,12 +352,12 @@ class Music(commands.Cog):
 
         if not player.is_connected:
             # We can't disconnect, if we're not connected.
-            return await ctx.send('Not connected.')
+            return await ctx.send('\u274c Not connected.')
 
         if not ctx.author.voice or (player.is_connected and ctx.author.voice.channel.id != int(player.channel_id)):
             # Abuse prevention. Users not in voice channels, or not in the same voice channel as the bot
             # may not disconnect the bot.
-            return await ctx.send('You\'re not in my voicechannel!')
+            return await ctx.send('\u274c You\'re not in my voicechannel!')
 
         # Clear the queue to ensure old tracks don't start playing
         # when someone else queues something.
@@ -384,7 +377,7 @@ class Music(commands.Cog):
                 queue_to_display.append(track)
 
         if not queue_to_display:
-            return await ctx.send('Nākošo dziesmu queue ir tukšs.')
+            return await ctx.send('\ud83d\udcc3 Nākošo dziesmu queue ir tukšs.')
 
         items_per_page = 10
         pages = math.ceil(len(player.queue) / items_per_page)
@@ -398,11 +391,11 @@ class Music(commands.Cog):
             queue_list += f'`{index + 1}.` [**{track.title}**]({track.uri}) - {user.mention}\n'
 
         embed = discord.Embed(colour=discord.Color.blurple(),
-                              description=f'**{len(queue_to_display)} dziesmas**\n\n{queue_list}')
+                              description=f'**\ud83d\uddc3\ufe0f {len(queue_to_display)} dziesmas**\n\n{queue_list}')
         embed.set_footer(text=f'Lapa {page}/{pages}')
         await ctx.send(embed=embed)
 
-    @cog_ext.cog_slash(name="queue", description="Apskati pasūtītās dziesmas")
+    @cog_ext.cog_slash(name="queue", description="\ud83d\uddc2\ufe0f Apskati pasūtītās dziesmas")
     async def slash_queue(self, ctx: SlashContext, lapa: int = 1):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -411,7 +404,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['q'])
     async def queue(self, ctx, page: int = 1):
-        """ Apskati pasūtītās dziesmas """
+        """ \ud83d\uddc2\ufe0f Apskati pasūtītās dziesmas """
         await self.view_queue(ctx, page)
 
     async def find_songs(self, ctx, query):
@@ -423,7 +416,7 @@ class Music(commands.Cog):
         results = await player.node.get_tracks(query)
 
         if not results or not results['tracks']:
-            return await ctx.send('Neko neatradu.')
+            return await ctx.send('\u274c Neko neatradu.')
 
         tracks = results['tracks'][:10]  # First 10 results
 
@@ -438,7 +431,7 @@ class Music(commands.Cog):
 
     @cog_ext.cog_slash(
         name="find",
-        description="Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube"
+        description="\ud83d\udd0d Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube"
     )
     async def slash_find(self, ctx: SlashContext, dziesmas_nosaukums: str):
         if not await self.ensure_slash_voice(ctx):
@@ -448,7 +441,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def find(self, ctx, *, query):
-        """ Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube """
+        """ \ud83d\udd0d Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube """
         await self.find_songs(ctx, query)
 
     @commands.is_owner()
@@ -472,7 +465,7 @@ class Music(commands.Cog):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not player.current:
-            return await ctx.send('Nekas neskan, rip.')
+            return await ctx.send('\u274c Nekas neskan, rip.')
 
         position = lavalink.utils.format_time(player.position)
         if player.current.stream:
@@ -482,10 +475,10 @@ class Music(commands.Cog):
         song = f'**[{player.current.title}]({player.current.uri})**\n({position}/{duration})'
 
         embed = discord.Embed(color=discord.Color.blurple(),
-                              title='Tagad skan', description=song)
+                              title='\u25b6\ufe0f Tagad skan', description=song)
         await ctx.send(embed=embed)
 
-    @cog_ext.cog_slash(name="now", description="Parāda dziesmu, kas tiek pašlaik atskaņota")
+    @cog_ext.cog_slash(name="now", description="\ud83c\udfb5 Parāda dziesmu, kas tiek pašlaik atskaņota")
     async def slash_now(self, ctx: SlashContext):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -494,27 +487,27 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['np', 'n', 'playing'])
     async def now(self, ctx):
-        """ Parāda dziesmu, kas tiek pašlaik atskaņota """
+        """ \ud83c\udfb5 Parāda dziesmu, kas tiek pašlaik atskaņota """
         await self.view_now_playing(ctx)
 
     async def delete_last_request(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not player.queue:
-            return await ctx.send("Queue ir jau pavisam tukšs")
+            return await ctx.send("\u274c Queue ir jau pavisam tukšs")
 
         try:
             to_remove = next(x for x in reversed(player.queue) if x.requester == ctx.author.id)
         except StopIteration:
-            return await ctx.send("Tu nemaz neesi pasūtījis nevienu dziesmu.")
+            return await ctx.send("\u274c Tu nemaz neesi pasūtījis nevienu dziesmu.")
         
         player.queue.remove(to_remove)
 
-        await ctx.send(f"Ok, izņēmu tavu pēdējo pasūtīto dziesmu **{to_remove.title}** no queue.")
+        await ctx.send(f"\ud83e\uddf9 Ok, izņēmu tavu pēdējo pasūtīto dziesmu **{to_remove.title}** no queue.")
 
     @cog_ext.cog_slash(
         name="remove",
-        description="Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue"
+        description="\u274c Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue"
     )
     async def slash_remove(self, ctx: SlashContext):
         if not await self.ensure_slash_voice(ctx):
@@ -524,7 +517,7 @@ class Music(commands.Cog):
     
     @commands.command()
     async def remove(self, ctx):
-        """ Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue """
+        """ \u274c Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue """
         await self.delete_last_request(ctx)
 
     @commands.is_owner()
