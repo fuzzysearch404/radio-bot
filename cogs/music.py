@@ -500,13 +500,14 @@ class Music(commands.Cog):
     @commands.command()
     async def reloadplaylists(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
-        self.tracks = []
+        
+        self.tracks_low = []
+        self.tracks_medium = []
+        self.tracks_high = []
 
-        with open('./playlists.txt', 'r') as playl:
-            for line in playl.readlines():
-                await self.load_playlist(player, line.replace('\n', ''))
+        await self.load_all_playlists_from_files(player)
 
-        await ctx.send('\u2705')
+        await ctx.message.add_reaction('\u2705')
 
     @commands.is_owner()
     @commands.command()
@@ -515,7 +516,7 @@ class Music(commands.Cog):
 
         player.queue.clear()
 
-        await ctx.send('\u2705')
+        await ctx.message.add_reaction('\u2705')
 
 def setup(bot):
     bot.add_cog(Music(bot))
