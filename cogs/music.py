@@ -19,8 +19,10 @@ class Music(commands.Cog):
         self.bot.loop.create_task(self.attach_lavalink())
         self.radio_loop.start()
         
-        if not hasattr(self, 'tracks'):
-            self.tracks = []
+        if not hasattr(self, 'tracks_high'):
+            self.tracks_low = []
+            self.tracks_medium = []
+            self.tracks_high = []
 
     async def attach_lavalink(self):
         await self.bot.wait_until_ready()
@@ -42,7 +44,7 @@ class Music(commands.Cog):
             lava_track = lavalink.models.AudioTrack(tracks[0], self.bot.user.id, recommended=True)
             player.add(requester=self.bot.user.id, track=lava_track)
 
-    async def load_playlist(self, player, query: str):
+    async def load_playlist(self, player, query: str, to_list: list):
         query = query.strip('<>')
 
         if not url_rx.match(query):
@@ -52,21 +54,39 @@ class Music(commands.Cog):
         results = await player.node.get_tracks(query)
 
         tracks = results['tracks']
-        self.tracks.extend(tracks)
+        to_list.extend(tracks)
+
+    async def load_playlist_from_file(self, player, filename: str, to_list: list):
+        with open(f'./playlists/{filename}', 'r') as playl:
+            for line in playl.readlines():
+                await self.load_playlist(player, line.replace('\n', ''), to_list)
+
+    async def load_all_playlists_from_files(self, player):
+        await self.load_playlist_from_file(player, 'high-priority.txt', self.tracks_high)
+        await self.load_playlist_from_file(player, 'medium-priority.txt', self.tracks_medium)
+        await self.load_playlist_from_file(player, 'low-priority.txt', self.tracks_low)
 
     @tasks.loop(seconds=1)
     async def radio_loop(self):
         players = self.bot.lavalink.player_manager.find_all()
         
         for player in players:
-            if not self.tracks:
-                with open('./playlists.txt', 'r') as playl:
-                    for line in playl.readlines():
-                        await self.load_playlist(player, line.replace('\n', ''))
-                continue
+            if not self.tracks_high:
+                await self.load_all_playlists_from_files(player)
+                break
             
             if player.is_connected and len(player.queue) == 0:
-                track = random.choice(self.tracks)
+                if random.randint(1, 2) != 1:
+                    track = random.choice(self.tracks_high)
+                elif random.randint(1, 2) != 1:
+                    track = random.choice(self.tracks_medium)
+                else:
+                    track = random.choice(self.tracks_low)
+                
+                # They still might be being fetched right now
+                if not track:
+                    continue
+                
                 lava_track = lavalink.models.AudioTrack(track, self.bot.user.id, recommended=True)
                 player.add(requester=self.bot.user.id, track=lava_track)
                 print(f"Added track to auto queue {lava_track.title}")
