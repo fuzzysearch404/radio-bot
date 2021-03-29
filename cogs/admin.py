@@ -7,6 +7,8 @@ from discord.ext import commands
 from contextlib import redirect_stdout
 
 from .utils.formats import TabularData, plural
+
+
 class Admin(commands.Cog):
     def __init__(self, bot) -> None:
         super().__init__()

@@ -17,6 +17,8 @@ from .utils import convertors
 
 URL_REGX = re.compile(r'https?://(?:www\.)?.+')
 USER_QUEUE_REQUESTS_LIMIT = 6
+
+
 class Music(commands.Cog):
     def __init__(self, bot) -> None:
         super().__init__()
