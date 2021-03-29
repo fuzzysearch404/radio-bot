@@ -16,7 +16,16 @@ from discord_slash import SlashContext
 from .utils import convertors
 
 URL_REGX = re.compile(r'https?://(?:www\.)?.+')
+
 USER_QUEUE_REQUESTS_LIMIT = 6
+SONG_REQUEST_MAX_LENGHT_MILIS = 600000
+
+RADIO_JINGLES_DIR_PATH = './jingles'
+
+PLAYLISTS_DIR_PATH = './playlists'
+PLAYLIST_FILE_NAME_HIGH_PRIORITY = 'high-priority.txt'
+PLAYLIST_FILE_NAME_MEDIUM_PRIORITY = 'medium-priority.txt'
+PLAYLIST_FILE_NAME_LOW_PRIORITY = 'low-priority.txt'
 
 
 class Music(commands.Cog):
@@ -43,8 +52,8 @@ class Music(commands.Cog):
             self.bot.lavalink.add_event_hook(self.track_hook)
 
     async def load_jingle(self, player) -> None:
-        path = random.choice(os.listdir('./jingles'))
-        path = './jingles/' + str(path)
+        path = random.choice(os.listdir(RADIO_JINGLES_DIR_PATH))
+        path = RADIO_JINGLES_DIR_PATH + str(path)
 
         result = await player.node.get_tracks(path)
         tracks = result['tracks']
@@ -65,14 +74,14 @@ class Music(commands.Cog):
         to_list.extend(tracks)
 
     async def load_playlist_from_file(self, player, filename: str, to_list: list) -> None:
-        with open(f'./playlists/{filename}', 'r') as playl:
+        with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
                 await self.load_playlist(player, line.replace('\n', ''), to_list)
 
     async def load_all_playlists_from_files(self, player) -> None:
-        await self.load_playlist_from_file(player, 'high-priority.txt', self.tracks_high)
-        await self.load_playlist_from_file(player, 'medium-priority.txt', self.tracks_medium)
-        await self.load_playlist_from_file(player, 'low-priority.txt', self.tracks_low)
+        await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_HIGH_PRIORITY, self.tracks_high)
+        await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_MEDIUM_PRIORITY, self.tracks_medium)
+        await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_LOW_PRIORITY, self.tracks_low)
 
     async def stats_give_users_listen_minutes(self, user_ids_minutes: list) -> None:
         query = """
@@ -350,7 +359,7 @@ class Music(commands.Cog):
             return await ctx.send("\u274c Nevaru atrast neko vai arī kaut kas nokāries, bruh.")
         
         if not is_owner:
-            if track['info']['length'] > 600000:
+            if track['info']['length'] > SONG_REQUEST_MAX_LENGHT_MILIS:
                 return await ctx.send("\u23f0 Šī dziesma ir pārāk gara... (10mins max)")
 
         embed.title = '\u2705 Dziesma pievienota queue!'
