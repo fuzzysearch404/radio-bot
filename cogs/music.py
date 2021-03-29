@@ -1,3 +1,6 @@
+"""
+Requires intents for members and voice states
+"""
 import re
 import os
 import discord
@@ -10,6 +13,8 @@ from discord.ext import tasks
 from discord_slash import cog_ext
 from discord_slash import SlashContext
 
+from .utils import convertors
+
 URL_REGX = re.compile(r'https?://(?:www\.)?.+')
 USER_QUEUE_REQUESTS_LIMIT = 6
 class Music(commands.Cog):
@@ -18,13 +23,14 @@ class Music(commands.Cog):
         self.bot = bot
         self.bot.loop.create_task(self.attach_lavalink())
         self.radio_loop.start()
+        self.radio_stats_minutes_loop.start()
         
         if not hasattr(self, 'tracks_high'):
             self.tracks_low = []
             self.tracks_medium = []
             self.tracks_high = []
 
-    async def attach_lavalink(self):
+    async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
 
         if not hasattr(self.bot, 'lavalink'):  # This ensures the client isn't overwritten during cog reloads.
@@ -34,7 +40,7 @@ class Music(commands.Cog):
 
             self.bot.lavalink.add_event_hook(self.track_hook)
 
-    async def load_jingle(self, player):
+    async def load_jingle(self, player) -> None:
         path = random.choice(os.listdir('./jingles'))
         path = './jingles/' + str(path)
 
@@ -44,7 +50,7 @@ class Music(commands.Cog):
             lava_track = lavalink.models.AudioTrack(tracks[0], self.bot.user.id, recommended=True)
             player.add(requester=self.bot.user.id, track=lava_track)
 
-    async def load_playlist(self, player, query: str, to_list: list):
+    async def load_playlist(self, player, query: str, to_list: list) -> None:
         query = query.strip('<>')
 
         if not URL_REGX.match(query):
@@ -56,18 +62,83 @@ class Music(commands.Cog):
         tracks = results['tracks']
         to_list.extend(tracks)
 
-    async def load_playlist_from_file(self, player, filename: str, to_list: list):
+    async def load_playlist_from_file(self, player, filename: str, to_list: list) -> None:
         with open(f'./playlists/{filename}', 'r') as playl:
             for line in playl.readlines():
                 await self.load_playlist(player, line.replace('\n', ''), to_list)
 
-    async def load_all_playlists_from_files(self, player):
+    async def load_all_playlists_from_files(self, player) -> None:
         await self.load_playlist_from_file(player, 'high-priority.txt', self.tracks_high)
         await self.load_playlist_from_file(player, 'medium-priority.txt', self.tracks_medium)
         await self.load_playlist_from_file(player, 'low-priority.txt', self.tracks_low)
 
+    async def stats_give_users_listen_minutes(self, user_ids_minutes: list) -> None:
+        query = """
+                INSERT INTO radio_stats(userid, listening_minutes)
+                VALUES ($1, $2) ON CONFLICT (userid)
+                DO UPDATE
+                SET listening_minutes = radio_stats.listening_minutes + $2;
+                """
+
+        async with self.bot.db.acquire() as connection:
+            async with connection.transaction():
+                # List of tuples with user ids and minutes
+                await self.bot.db.executemany(query, user_ids_minutes)
+
+
+    async def stats_give_user_song_request(self, user_id: int, requests: int) -> None:
+        query = """
+                INSERT INTO radio_stats(userid, song_requests)
+                VALUES ($1, $2) ON CONFLICT (userid)
+                DO UPDATE
+                SET song_requests = radio_stats.song_requests + $2;
+                """
+
+        async with self.bot.db.acquire() as connection:
+            async with connection.transaction():
+                await self.bot.db.execute(query, user_id, requests)
+
+    @tasks.loop(minutes=1)
+    async def radio_stats_minutes_loop(self) -> None:
+        players = self.bot.lavalink.player_manager.find_all()
+
+        db_data_rows = []
+
+        for player in players:
+            # Lavalink.py stupidly stores guild_id as a string
+            guild = await convertors.get_fetch_guild(self.bot, int(player.guild_id))
+            if not guild:
+                continue # RIP?
+
+            bot_member = guild.me
+            if not bot_member:
+                bot_member = await convertors.get_fetch_member(self.bot, guild, self.bot.user.id)
+                if not bot_member:
+                    continue # RIP?
+
+            bot_voice_state = bot_member.voice
+            if not bot_voice_state:
+                self.bot.log.error(f"Can't get my voice state for guild {player.guild_id}")
+                continue
+            
+            for member in bot_voice_state.channel.members:
+                if member.id in self.bot.blacklist:
+                    continue
+
+                if not member.bot:
+                    voice_state = member.voice
+                    if not voice_state:
+                        self.bot.log.error(f"Can't get voice state for member {member.id}")
+                        continue
+                    
+                    if not voice_state.self_deaf and not voice_state.deaf:
+                        db_data_rows.append((member.id, 1))
+
+        if db_data_rows:
+            await self.stats_give_users_listen_minutes(db_data_rows)
+
     @tasks.loop(seconds=1)
-    async def radio_loop(self):
+    async def radio_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
         
         for player in players:
@@ -89,24 +160,24 @@ class Music(commands.Cog):
                 
                 lava_track = lavalink.models.AudioTrack(track, self.bot.user.id, recommended=True)
                 player.add(requester=self.bot.user.id, track=lava_track)
-                print(f"Added track to auto queue {lava_track.title}")
+                self.bot.log.info(f"Added track to auto queue {lava_track.title}")
 
                 jingle_counter = player.fetch(key='jingle', default=-1)
                 if jingle_counter <= 0:
                     await self.load_jingle(player)
-                    print("Loaded jingle to auto queue")
+                    self.bot.log.info("Loaded jingle to auto queue")
                     player.store(key='jingle', value=random.randint(2, 3))
                 else:
                     player.store(key='jingle', value=jingle_counter-1)
 
             if not player.is_connected:
-                print("Found that player is not connected. Trying to reconnect")
+                self.bot.log.error("Found that player is not connected. Trying to reconnect")
                 chan_id = player.fetch(key=f'chan:{player.guild_id}', default=0)
                 
                 if chan_id:
-                    guild = self.bot.get_guild(player.guild_id)
+                    guild = await convertors.get_fetch_guild(self.bot, int(player.guild_id))
                     if not guild:
-                        guild = await self.bot.fetch_guild(player.guild_id)
+                        continue
                     
                     chan = guild.get_channel(chan_id)
                     if not chan:
@@ -115,26 +186,34 @@ class Music(commands.Cog):
                     
                     await guild.change_voice_state(channel=chan)
 
-            if not player.is_playing and not player.paused:
-                print("Found that player is not playing. Trying to restart playback")
+            if player.is_connected and not player.is_playing and not player.paused:
+                self.bot.log.error("Found that player is not playing. Trying to restart playback")
                 await player.play()
 
-            if not player.current:
-                print("Found that player has no current track. Trying to skip")
+            if player.is_connected and not player.current:
+                self.bot.log.error("Found that player has no current track. Trying to skip")
                 await player.skip()
 
-    @radio_loop.before_loop
-    async def before_radio_loop(self):
+    async def await_lavalink_attached(self) -> None:
         # Don't do anything before lavalink init
         await self.bot.wait_until_ready()
         while not hasattr(self.bot, 'lavalink'):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
             continue
+
+    @radio_loop.before_loop
+    async def before_radio_loop(self):
+        await self.await_lavalink_attached()
+
+    @radio_stats_minutes_loop.before_loop
+    async def before_radio_loop(self):
+         await self.await_lavalink_attached()
 
     def cog_unload(self):
         """ Cog unload handler. This removes any event hooks that were registered. """
         self.bot.lavalink._event_hooks.clear()
         self.radio_loop.stop()
+        self.radio_stats_minutes_loop.cancel()
 
     async def cog_before_invoke(self, ctx):
         """ Command before-invoke handler. """
@@ -155,20 +234,10 @@ class Music(commands.Cog):
     async def ensure_voice(self, ctx):
         """ This check ensures that the bot and command author are in the same voicechannel. """
         player = self.bot.lavalink.player_manager.create(ctx.guild.id, endpoint=str(ctx.guild.region))
-        # Create returns a player if one exists, otherwise creates.
-        # This line is important because it ensures that a player always exists for a guild.
 
-        # Most people might consider this a waste of resources for guilds that aren't playing, but this is
-        # the easiest and simplest way of ensuring players are created.
-
-        # These are commands that require the bot to join a voicechannel (i.e. initiating playback).
-        # Commands such as volume/skip etc don't require the bot to be in a voicechannel so don't need listing here.
         should_connect = ctx.command.name in ('play',)
 
         if not ctx.author.voice or not ctx.author.voice.channel:
-            # Our cog_command_error handler catches this and sends it to the voicechannel.
-            # Exceptions allow us to "short-circuit" command invocation via checks so the
-            # execution state of the command goes no further.
             raise commands.CommandInvokeError('\u274c Tu neesi nevienā voice channel')
 
         if not player.is_connected:
@@ -188,7 +257,7 @@ class Music(commands.Cog):
             if int(player.channel_id) != ctx.author.voice.channel.id:
                 raise commands.CommandInvokeError('\ud83e\udd21 Tev vajag būt manā voice channel.')
 
-    async def ensure_slash_voice(self, ctx):
+    async def ensure_slash_voice(self, ctx) -> bool:
         """ This check ensures that the bot and command author are in the same voicechannel. """
         if not ctx.guild:
             await ctx.send("\u274c Komandas var izmantot tikai serverī")
@@ -231,7 +300,7 @@ class Music(commands.Cog):
         elif isinstance(event, lavalink.events.TrackStuckEvent):
             await event.player.skip()
         elif isinstance(event, lavalink.events.NodeDisconnectedEvent):
-            print("Node got disconneceted!")
+            self.bot.log.critical("Node got disconneceted!")
 
     async def do_play(self, ctx, query):
         # Get the player for this guild from cache.
@@ -256,7 +325,6 @@ class Music(commands.Cog):
         if not URL_REGX.match(query):
             query = f'ytsearch:{query}'
 
-        # Get the results for the query from Lavalink.
         results = await player.node.get_tracks(query)
 
         # Results could be None if Lavalink returns an invalid response (non-JSON/non-200 (OK)).
@@ -264,7 +332,7 @@ class Music(commands.Cog):
         if not results or not results['tracks']:
             return await ctx.send('\u274c Neko neatradu!')
 
-        embed = discord.Embed(color=discord.Color.blurple())
+        embed = discord.Embed(color=1558583)
 
         # Valid loadTypes are:
         #   TRACK_LOADED    - single video/direct URL)
@@ -298,10 +366,12 @@ class Music(commands.Cog):
         jingle_counter = player.fetch(key='jingle', default=-1)
         if jingle_counter <= 0:
             await self.load_jingle(player)
-            print('Loaded jingle to queue')
+            self.bot.log.info('Loaded jingle to queue')
             player.store(key='jingle', value=random.randint(2, 3))
         else:
             player.store(key='jingle', value=jingle_counter-1)
+
+        await self.stats_give_user_song_request(ctx.author.id, 1)
 
     @cog_ext.cog_slash(name="play", description="\u25b6\ufe0f Pasūtīt dziesmu radio")
     async def slash_play(self, ctx: SlashContext, dziesma: str):
@@ -378,7 +448,7 @@ class Music(commands.Cog):
         await player.stop()
         # Disconnect from the voice channel.
         await ctx.guild.change_voice_state(channel=None)
-        await ctx.send('*⃣ | Disconnected.')
+        await ctx.send('\u274c | Disconnected.')
 
     async def view_queue(self, ctx, page):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
@@ -516,6 +586,8 @@ class Music(commands.Cog):
         player.queue.remove(to_remove)
 
         await ctx.send(f"\ud83e\uddf9 Ok, izņēmu tavu pēdējo pasūtīto dziesmu **{to_remove.title}** no queue.")
+        
+        await self.stats_give_user_song_request(ctx.author.id, -1)
 
     @cog_ext.cog_slash(
         name="remove",
@@ -546,6 +618,7 @@ class Music(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def reloadplaylists(self, ctx):
+        """ Reloads all auto queue playlists """
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
         
         self.tracks_low = []
@@ -559,11 +632,108 @@ class Music(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def clear(self, ctx):
+        """ Clears the whole queue. """
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         player.queue.clear()
 
         await ctx.message.add_reaction('\u2705')
+
+    def minutes_to_days(self, minutes: int) -> tuple:
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
+
+        return days, hours, minutes
+
+    async def view_user_stats(self, ctx, user):
+        target_member = user or ctx.author
+
+        query = """
+                SELECT * FROM radio_stats
+                WHERE userid = $1;
+                """
+        
+        user_data = await self.bot.db.fetchrow(query, target_member.id)
+        if not user_data:
+            return await ctx.send(f"\u274c **{target_member}** nav klausījies/-usies radio. :(")
+
+        embed = discord.Embed(
+            color=16137269,
+            title=f"\ud83d\udcca {target_member} radio statistika"
+        )
+        days, hours, minutes = self.minutes_to_days(user_data["listening_minutes"])
+        embed.add_field(name="\ud83d\udd50 Klausīšanās ilgums", value=f"{days} dienas {hours} stundas {minutes} minūtes")
+        embed.add_field(name="\ud83c\udfb6 Pasūtītās dziesmas", value=f"{user_data['song_requests']}")
+
+        await ctx.send(embed=embed)
+
+    @cog_ext.cog_slash(
+        name="stats",
+        description="\ud83d\udcca Apskati savu vai kāda cita radio klausīšanās statistiku"
+    )
+    async def slash_stats(self, ctx: SlashContext, cits_lietotajs: discord.Member=None):
+        if not await self.ensure_slash_voice(ctx):
+            return
+        
+        await self.view_user_stats(ctx, cits_lietotajs)
+    
+    @commands.command()
+    async def stats(self, ctx, cits_lietotajs: discord.Member=None):
+        """ \ud83d\udcca Apskati savu vai kāda cita radio klausīšanās statistiku """
+        await self.view_user_stats(ctx, cits_lietotajs)
+
+    async def view_top_users(self, ctx):
+        query_minutes = """
+                SELECT * FROM radio_stats
+                ORDER BY listening_minutes DESC
+                LIMIT 8;
+                """
+
+        query_requests = """
+                SELECT * FROM radio_stats
+                ORDER BY song_requests DESC
+                LIMIT 8;
+                """
+
+        top_minutes = await self.bot.db.fetch(query_minutes)
+        top_requests = await self.bot.db.fetch(query_requests)
+
+        embed = discord.Embed(
+            color=16173112,
+            title=f"\ud83c\udfc6 Lojālākie radio klausītāji"
+        )
+
+        embed.description = "\ud83d\udd50 **Klausīšanās ilgums:**"
+        if top_minutes:
+            for top_data in top_minutes:
+                embed.description += f"\n<@{top_data['userid']}> - {top_data['listening_minutes']} minūtes"
+        else:
+            embed.description += "\nNav datu :\\"
+        
+        embed.description += "\n\n\ud83c\udfb6 **Pasūtītās dziesmas:**"
+        if top_requests:
+            for top_data in top_requests:
+                embed.description += f"\n<@{top_data['userid']}> - {top_data['song_requests']} dziesmas"
+        else:
+            embed.description += "\nNav datu :\\"
+
+        await ctx.send(embed=embed)
+    
+    @cog_ext.cog_slash(
+        name="top",
+        description="\ud83c\udfc6 Apskati lojālākos radio klausītājus"
+    )
+    async def slash_top(self, ctx: SlashContext):
+        if not await self.ensure_slash_voice(ctx):
+            return
+        
+        await self.view_top_users(ctx)
+    
+    @commands.command()
+    async def top(self, ctx):
+        """ \ud83c\udfc6 Apskati lojālākos radio klausītājus """
+        await self.view_top_users(ctx)
+
 
 def setup(bot):
     bot.add_cog(Music(bot))
