@@ -406,7 +406,9 @@ class Music(commands.Cog):
             await player.skip()
         else:
             channel = self.bot.get_channel(int(player.channel_id))
-            required = math.ceil((len(channel.members) - 1) / 2.5)
+            # The amount of people (not bots) that are actually listening right now
+            real_listners = [x for x in channel.members if not x.bot and not x.voice.self_deaf and not x.voice.deaf]
+            required_votes = math.ceil(len(real_listners) / 2.5)
 
             votes = player.fetch(key='skips', default=[])
             if ctx.author.id in votes:
@@ -416,11 +418,12 @@ class Music(commands.Cog):
                 player.store(key='skips', value=votes)
                 votes = len(votes)
 
-            if votes >= required:
+            if votes >= required_votes:
                 await player.skip()
             else:
                 return await ctx.send(
-                    f"\u23e9\u2753 `{ctx.author}`grib skipot šo dziesmu. Vēl nepieciešamas **{required - votes}** balsis!"
+                    f"\u23e9\u2753 `{ctx.author}`grib skipot šo dziesmu. "
+                    f"Vēl nepieciešamas **{required_votes - votes}** balsis!"
                 )
 
         await ctx.send(f"\u23e9 Skipojam **{song_name}**!")
