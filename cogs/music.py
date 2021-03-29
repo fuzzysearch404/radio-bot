@@ -10,8 +10,8 @@ from discord.ext import tasks
 from discord_slash import cog_ext
 from discord_slash import SlashContext
 
-url_rx = re.compile(r'https?://(?:www\.)?.+')
-
+URL_REGX = re.compile(r'https?://(?:www\.)?.+')
+USER_QUEUE_REQUESTS_LIMIT = 6
 class Music(commands.Cog):
     def __init__(self, bot) -> None:
         super().__init__()
@@ -47,7 +47,7 @@ class Music(commands.Cog):
     async def load_playlist(self, player, query: str, to_list: list):
         query = query.strip('<>')
 
-        if not url_rx.match(query):
+        if not URL_REGX.match(query):
             query = f'ytsearch:{query}'
 
         # Get the results for the query from Lavalink.
@@ -236,12 +236,24 @@ class Music(commands.Cog):
     async def do_play(self, ctx, query):
         # Get the player for this guild from cache.
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
+
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        user_song_count_in_queue = sum(1 for x in player.queue if x.requester == ctx.author.id)
+        if not is_owner:
+            if user_song_count_in_queue >= USER_QUEUE_REQUESTS_LIMIT:
+                return await ctx.send(
+                    "\u231b Tu esi sasniedzis maksimālo pasūtīto dziesmu "
+                    f"limitu queue (**{USER_QUEUE_REQUESTS_LIMIT}** dziesmas). "
+                    "Pagaidi, līdz izskan kāda no tavām dziesmām, lai arī citi "
+                    "var pasūtīt savas dziesmas.")
+
         # Remove leading and trailing <>. <> may be used to suppress embedding links in Discord.
         query = query.strip('<>')
 
         # Check if the user input might be a URL. If it isn't, we can Lavalink do a YouTube search for it instead.
         # SoundCloud searching is possible by prefixing "scsearch:" instead.
-        if not url_rx.match(query):
+        if not URL_REGX.match(query):
             query = f'ytsearch:{query}'
 
         # Get the results for the query from Lavalink.
@@ -267,7 +279,7 @@ class Music(commands.Cog):
         else:
             return await ctx.send("\u274c Nevaru atrast neko vai arī kaut kas nokāries, bruh.")
         
-        if not await self.bot.is_owner(ctx.author):
+        if not is_owner:
             if track['info']['length'] > 600000:
                 return await ctx.send("\u23f0 Šī dziesma ir pārāk gara... (10mins max)")
 
@@ -478,7 +490,7 @@ class Music(commands.Cog):
                               title='\u25b6\ufe0f Tagad skan', description=song)
         await ctx.send(embed=embed)
 
-    @cog_ext.cog_slash(name="now", description="\ud83c\udfb5 Parāda dziesmu, kas tiek pašlaik atskaņota")
+    @cog_ext.cog_slash(name="now", description="\ud83c\udfb5 Parāda dziesmu, kas pašlaik tiek atskaņota")
     async def slash_now(self, ctx: SlashContext):
         if not await self.ensure_slash_voice(ctx):
             return
@@ -487,7 +499,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=['np', 'n', 'playing'])
     async def now(self, ctx):
-        """ \ud83c\udfb5 Parāda dziesmu, kas tiek pašlaik atskaņota """
+        """ \ud83c\udfb5 Parāda dziesmu, kas pašlaik tiek atskaņota """
         await self.view_now_playing(ctx)
 
     async def delete_last_request(self, ctx):
