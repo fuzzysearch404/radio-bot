@@ -310,6 +310,9 @@ class Music(commands.Cog):
             self.radio_loop.restart()
         elif isinstance(event, lavalink.events.TrackStuckEvent):
             await event.player.skip()
+        elif isinstance(event, lavalink.events.TrackExceptionEvent):
+            self.bot.log.error(f"Exception occured for track: {event.track.title}")
+            self.bot.log.error(event.exception)
         elif isinstance(event, lavalink.events.NodeDisconnectedEvent):
             self.bot.log.critical("Node got disconneceted!")
 
@@ -399,7 +402,8 @@ class Music(commands.Cog):
     async def do_skip(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
-        song_name = player.current.title
+        skip_track = player.current
+
         if await self.bot.is_owner(ctx.author):
             await player.skip()
         elif player.current.requester == ctx.author.id:
@@ -426,7 +430,9 @@ class Music(commands.Cog):
                     f"Vēl nepieciešamas **{required_votes - votes}** balsis!"
                 )
 
-        await ctx.send(f"\u23e9 Skipojam **{song_name}**!")
+        requester = await convertors.get_fetch_member(self.bot, ctx.guild, skip_track.requester)
+        
+        await ctx.send(f"\u23e9 Skipojam `{requester}` pasūtīto dziesmu: **{skip_track.title}**!")
 
     @cog_ext.cog_slash(name="skip", description="\u23e9 Skipot patreizējo dziesmu")
     async def slash_skip(self, ctx: SlashContext):
@@ -486,7 +492,7 @@ class Music(commands.Cog):
             user = ctx.guild.get_member(track.requester)
             queue_list += f'`{index + 1}.` [**{track.title}**]({track.uri}) - {user.mention}\n'
 
-        embed = discord.Embed(colour=discord.Color.blurple(),
+        embed = discord.Embed(colour=789734,
                               description=f'**\ud83d\uddc3\ufe0f {len(queue_to_display)} dziesmas**\n\n{queue_list}')
         embed.set_footer(text=f'Lapa {page}/{pages}')
         await ctx.send(embed=embed)
@@ -568,9 +574,13 @@ class Music(commands.Cog):
             duration = '\ud83d\udd34 LIVE'
         else:
             duration = lavalink.utils.format_time(player.current.duration)
-        song = f'**[{player.current.title}]({player.current.uri})**\n({position}/{duration})'
+        song = (
+            f'**[{player.current.title}]({player.current.uri})**'
+            f'\n\ud83d\udc64 <@{player.current.requester}>'
+            f'\n\u23f2\ufe0f {position}/{duration}'
+        )
 
-        embed = discord.Embed(color=discord.Color.blurple(),
+        embed = discord.Embed(color=13110502,
                               title='\u25b6\ufe0f Tagad skan', description=song)
         await ctx.send(embed=embed)
 
@@ -720,14 +730,24 @@ class Music(commands.Cog):
         embed.description = "\ud83d\udd50 **Klausīšanās ilgums:**"
         if top_minutes:
             for top_data in top_minutes:
-                embed.description += f"\n<@{top_data['userid']}> - {top_data['listening_minutes']} minūtes"
+                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['userid'])
+                if user:
+                    username = user.name + '#' + user.discriminator
+                else:
+                    username = 'Nezināms klausītājs'
+                embed.description += f"\n`{username}` - {top_data['listening_minutes']} minūtes"
         else:
             embed.description += "\nNav datu :\\"
         
         embed.description += "\n\n\ud83c\udfb6 **Pasūtītās dziesmas:**"
         if top_requests:
             for top_data in top_requests:
-                embed.description += f"\n<@{top_data['userid']}> - {top_data['song_requests']} dziesmas"
+                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['userid'])
+                if user:
+                    username = user.name + '#' + user.discriminator
+                else:
+                    username = 'Nezināms klausītājs'
+                embed.description += f"\n`{username}` - {top_data['song_requests']} dziesmas"
         else:
             embed.description += "\nNav datu :\\"
 
