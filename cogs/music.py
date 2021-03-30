@@ -53,7 +53,7 @@ class Music(commands.Cog):
 
     async def load_jingle(self, player) -> None:
         path = random.choice(os.listdir(RADIO_JINGLES_DIR_PATH))
-        path = RADIO_JINGLES_DIR_PATH + str(path)
+        path = RADIO_JINGLES_DIR_PATH + '/' + str(path)
 
         result = await player.node.get_tracks(path)
         tracks = result['tracks']
