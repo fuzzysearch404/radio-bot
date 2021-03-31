@@ -133,10 +133,10 @@ class Music(commands.Cog):
 
         self.programme = None
         
-        self.tracks_programme = {}
-        self.tracks_low = {}
-        self.tracks_medium = {}
-        self.tracks_high = {}
+        self.tracks_programme = []
+        self.tracks_low = []
+        self.tracks_medium = []
+        self.tracks_high = []
 
     async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
@@ -162,7 +162,7 @@ class Music(commands.Cog):
         if tracks:
             player.add(requester=self.bot.user.id, track=tracks[0])
 
-    async def load_playlist(self, player, query: str, to_set: set) -> None:
+    async def load_playlist(self, player, query: str, to_list: list) -> None:
         query = query.strip('<>')
 
         if not URL_REGX.match(query):
@@ -172,12 +172,12 @@ class Music(commands.Cog):
         results = await player.node.get_tracks(query)
 
         tracks = results['tracks']
-        to_set.update(tracks)
+        to_list.extend(tracks)
 
-    async def load_playlist_from_file(self, player, filename: str, to_set: set) -> None:
+    async def load_playlist_from_file(self, player, filename: str, to_list: list) -> None:
         with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
-                await self.load_playlist(player, line.replace('\n', ''), to_set)
+                await self.load_playlist(player, line.replace('\n', ''), to_list)
 
     async def load_programme_playlist_from_file(self, player) -> None:
         if not self.programme:
@@ -223,7 +223,7 @@ class Music(commands.Cog):
             else:
                 self.bot.log.info(f"Programme {self.programme.title} has ended")
                 self.programme = None
-                self.tracks_programme.clear()
+                self.tracks_programme = []
 
         for prog in self.all_programmes:
             if prog.should_be_active():
@@ -604,7 +604,7 @@ class Music(commands.Cog):
         await ctx.guild.change_voice_state(channel=None)
         await ctx.send('\u274c | Disconnected.')
 
-    async def view_queue(self, ctx, page):
+    async def do_view_queue(self, ctx, page):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         queue_to_display = []
@@ -636,14 +636,14 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.view_queue(ctx, lapa)
+        await self.do_view_queue(ctx, lapa)
 
     @commands.command(aliases=['q'])
     async def queue(self, ctx, page: int = 1):
         """ \ud83d\uddc2\ufe0f Apskati pasūtītās dziesmas """
-        await self.view_queue(ctx, page)
+        await self.do_view_queue(ctx, page)
 
-    async def find_songs(self, ctx, query):
+    async def do_find_songs(self, ctx, query):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not query.startswith('ytsearch:') and not query.startswith('scsearch:'):
@@ -673,12 +673,12 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.find_songs(ctx, dziesmas_nosaukums)
+        await self.do_find_songs(ctx, dziesmas_nosaukums)
 
     @commands.command()
     async def find(self, ctx, *, query):
         """ \ud83d\udd0d Atrod un parāda 10 meklētās dziesmas rezultātus no Youtube """
-        await self.find_songs(ctx, query)
+        await self.do_find_songs(ctx, query)
 
     @commands.is_owner()
     @commands.command(aliases=['vol'])
@@ -697,7 +697,7 @@ class Music(commands.Cog):
         await player.set_volume(volume)
         await ctx.send(f'🔈 | Set to {player.volume}%')
 
-    async def view_now_playing(self, ctx):
+    async def do_view_now_playing(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not player.current:
@@ -733,14 +733,14 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.view_now_playing(ctx)
+        await self.do_view_now_playing(ctx)
 
     @commands.command(aliases=['np', 'n', 'playing'])
     async def now(self, ctx):
         """ \ud83c\udfb5 Parāda dziesmu, kas pašlaik tiek atskaņota """
-        await self.view_now_playing(ctx)
+        await self.do_view_now_playing(ctx)
 
-    async def delete_last_request(self, ctx):
+    async def do_delete_last_request(self, ctx):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not player.queue:
@@ -765,12 +765,12 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.delete_last_request(ctx)
+        await self.do_delete_last_request(ctx)
     
     @commands.command()
     async def remove(self, ctx):
         """ \u274c Nepareizā dziesma? Šī komanda noņem tavu pēdējo pasūtīto dziesmu no queue """
-        await self.delete_last_request(ctx)
+        await self.do_delete_last_request(ctx)
 
     @commands.is_owner()
     @commands.command()
@@ -789,10 +789,10 @@ class Music(commands.Cog):
         """ Reloads all auto queue playlists """
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
         
-        self.tracks_low.clear()
-        self.tracks_medium.clear()
-        self.tracks_high.clear()
-        self.tracks_programme.clear()
+        self.tracks_low = []
+        self.tracks_medium = []
+        self.tracks_high = []
+        self.tracks_programme = []
         
         if self.programme:
             await self.load_programme_playlist_from_file(player)
@@ -817,7 +817,7 @@ class Music(commands.Cog):
 
         return days, hours, minutes
 
-    async def view_user_stats(self, ctx, user):
+    async def do_view_user_stats(self, ctx, user):
         target_member = user or ctx.author
 
         query = """
@@ -850,14 +850,14 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.view_user_stats(ctx, cits_lietotajs)
+        await self.do_view_user_stats(ctx, cits_lietotajs)
     
     @commands.command()
     async def stats(self, ctx, cits_lietotajs: discord.Member=None):
         """ \ud83d\udcca Apskati savu vai kāda cita radio klausīšanās statistiku """
-        await self.view_user_stats(ctx, cits_lietotajs)
+        await self.do_view_user_stats(ctx, cits_lietotajs)
 
-    async def view_top_users(self, ctx):
+    async def do_view_top_users(self, ctx):
         query_minutes = """
                 SELECT * FROM radio_stats
                 ORDER BY listening_minutes DESC
@@ -912,14 +912,14 @@ class Music(commands.Cog):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.view_top_users(ctx)
+        await self.do_view_top_users(ctx)
     
     @commands.command()
     async def top(self, ctx):
         """ \ud83c\udfc6 Apskati lojālākos radio klausītājus """
-        await self.view_top_users(ctx)
+        await self.do_view_top_users(ctx)
 
-    async def view_radio_programmes(self, ctx):
+    async def do_view_radio_programmes(self, ctx, page):
         if not self.all_programmes:
             return await ctx.send("\u274c Nav radio programmu")
 
@@ -938,9 +938,11 @@ class Music(commands.Cog):
             6 : "Svētdiena"
         }
 
-        embed.description = ""
+        programmes_to_display = []
+        embed.description = ''
+
         for prog in self.all_programmes:
-            embed.description += f"**{prog.title}** - {prog.description}.\n"
+            programme_str = f"**{prog.title}** - {prog.description}.\n"
             for play_time in prog.play_times:
                 start_time = play_time.start_time
                 end_time = play_time.end_time
@@ -955,27 +957,39 @@ class Music(commands.Cog):
 
                 start_day_name = int_to_days[start_time.tm_wday]
                 if start_time.tm_wday == end_time.tm_wday:
-                    embed.description += f"{start_day_name} {start_time_str} - {end_time_str}\n"
+                    programme_str += f"{start_day_name} {start_time_str} - {end_time_str}\n"
                 else:
                     end_day_name = int_to_days[end_time.tm_wday]
-                    embed.description += f"{start_day_name} {start_time_str} - {end_day_name} {end_time_str}\n"
+                    programme_str += f"{start_day_name} {start_time_str} - {end_day_name} {end_time_str}\n"
+            
+            programmes_to_display.append(programme_str)
 
+        items_per_page = 4
+        pages = math.ceil(len(programmes_to_display) / items_per_page)
+
+        start = (page - 1) * items_per_page
+        end = start + items_per_page
+
+        for index, prog in enumerate(programmes_to_display[start:end], start=start):
+            embed.description += prog
+
+        embed.set_footer(text=f"Lapa {page}/{pages}")
         await ctx.send(embed=embed)
 
     @cog_ext.cog_slash(
         name="programma",
         description="\ud83d\udcf0 Apskati radio programmu"
     )
-    async def slash_programme(self, ctx: SlashContext):
+    async def slash_programme(self, ctx: SlashContext, lapa: int = 1):
         if not await self.ensure_slash_voice(ctx):
             return
         
-        await self.view_radio_programmes(ctx)
+        await self.do_view_radio_programmes(ctx, lapa)
     
     @commands.command()
-    async def programma(self, ctx):
+    async def programma(self, ctx, lapa: int = 1):
         """ \ud83d\udcf0 Apskati radio programmu """
-        await self.view_radio_programmes(ctx)
+        await self.do_view_radio_programmes(ctx, lapa)
 
 
 def setup(bot):
