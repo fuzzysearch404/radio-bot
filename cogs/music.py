@@ -99,11 +99,11 @@ class Music(commands.Cog):
                 play_times = [
                     ProgrammePlayTime("Monday 23:00", "Tuesday 5:00"),
                     ProgrammePlayTime("Tuesday 23:00", "Wednesday 5:00"),
-                    ProgrammePlayTime("Wednesday 0:00", "Thursday 5:00"),
-                    ProgrammePlayTime("Thursday 0:00", "Friday 5:00")
+                    ProgrammePlayTime("Wednesday 23:00", "Thursday 5:00"),
+                    ProgrammePlayTime("Thursday 23:00", "Friday 5:00")
                 ],
                 title="LoFi bītu vakars",
-                description="Atpūties, nomierinoša mūzika tavam darba dienas vakaram",
+                description="Atpūties. Nomierinoša mūzika tavam darba dienas vakaram",
                 playlists_file_name="lofi.txt",
                 jingles_diretory=None
             ),
