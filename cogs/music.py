@@ -1,5 +1,14 @@
 """
-Requires intents for members and voice states
+Requires intents for members and voice states.
+
+Jingles:
+Regular jingles have to be stored in directory: ./jingles
+Radio programme jingle directories under ./jingles
+For example: .jingles/programme
+
+Playlists:
+Playlists have to be stored in text files under ./playlists
+directory.
 """
 import re
 import os
@@ -8,6 +17,10 @@ import lavalink
 import asyncio
 import random
 import math
+import time
+from os.path import isfile
+from os.path import join as path_join
+from dataclasses import dataclass
 from discord.ext import commands
 from discord.ext import tasks
 from discord_slash import cog_ext
@@ -23,9 +36,55 @@ SONG_REQUEST_MAX_LENGHT_MILIS = 600000
 RADIO_JINGLES_DIR_PATH = './jingles'
 
 PLAYLISTS_DIR_PATH = './playlists'
+# Default playlists
 PLAYLIST_FILE_NAME_HIGH_PRIORITY = 'high-priority.txt'
 PLAYLIST_FILE_NAME_MEDIUM_PRIORITY = 'medium-priority.txt'
 PLAYLIST_FILE_NAME_LOW_PRIORITY = 'low-priority.txt'
+
+
+class ProgrammePlayTime:
+
+    __slots__ = ('start_time', 'end_time')
+
+    def __init__(self, start_time, end_time) -> None:
+        self.start_time = time.strptime(start_time, "%A %H:%M")
+        self.end_time = time.strptime(end_time, "%A %H:%M")
+
+    def convert_time(self, tm):
+        # Converts this to easily comparable tuple
+        return tm.tm_wday, tm.tm_min + tm.tm_hour * 60
+
+    def is_now(self) -> bool:
+        start_time = self.convert_time(self.start_time)
+        end_time = self.convert_time(self.end_time)
+        now = self.convert_time(time.localtime())
+
+        if start_time < end_time:
+            if start_time <= now < end_time:
+                return True
+        elif start_time > end_time:
+            if now >= start_time or now < end_time:
+                return True
+        elif start_time == now == end_time:
+            return True
+
+        return False
+
+
+@dataclass
+class RadioProgramme:
+    play_times: list
+    title: str
+    description: str
+    playlists_file_name: str
+    jingles_diretory: str
+
+    def should_be_active(self) -> bool:
+        for play_time in self.play_times:
+            if play_time.is_now():
+                return True
+
+        return False
 
 
 class Music(commands.Cog):
@@ -35,11 +94,49 @@ class Music(commands.Cog):
         self.bot.loop.create_task(self.attach_lavalink())
         self.radio_loop.start()
         self.radio_stats_minutes_loop.start()
+        self.all_programmes = (
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 23:00", "Tuesday 5:00"),
+                    ProgrammePlayTime("Tuesday 23:00", "Wednesday 5:00"),
+                    ProgrammePlayTime("Wednesday 0:00", "Thursday 5:00"),
+                    ProgrammePlayTime("Thursday 0:00", "Friday 5:00")
+                ],
+                title="LoFi bītu vakars",
+                description="Atpūties, nomierinoša mūzika tavam darba dienas vakaram",
+                playlists_file_name="lofi.txt",
+                jingles_diretory=None
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 12:00", "Monday 14:00"),
+                    ProgrammePlayTime("Wednesday 12:00", "Wednesday 14:00"),
+                    ProgrammePlayTime("Friday 12:00", "Friday 14:00")
+                ],
+                title="Tikai hiti",
+                description="Klausies tikai un vienīgi pašlaik vispopulārāko mūziku",
+                playlists_file_name="top.txt",
+                jingles_diretory=None
+            )
+            ,
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Tuesday 12:00", "Tuesday 14:00"),
+                    ProgrammePlayTime("Thursday 12:00", "Thursday 14:00")
+                ],
+                title="Disko mašīna",
+                description="Mūzika no 70., 80., 90. gadiem",
+                playlists_file_name="disco.txt",
+                jingles_diretory=None
+            )
+        )
+
+        self.programme = None
         
-        if not hasattr(self, 'tracks_high'):
-            self.tracks_low = []
-            self.tracks_medium = []
-            self.tracks_high = []
+        self.tracks_programme = []
+        self.tracks_low = []
+        self.tracks_medium = []
+        self.tracks_high = []
 
     async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
@@ -52,14 +149,18 @@ class Music(commands.Cog):
             self.bot.lavalink.add_event_hook(self.track_hook)
 
     async def load_jingle(self, player) -> None:
-        path = random.choice(os.listdir(RADIO_JINGLES_DIR_PATH))
-        path = RADIO_JINGLES_DIR_PATH + '/' + str(path)
+        if self.programme and self.programme.jingles_diretory:
+            file_name = random.choice(os.listdir(path_join(RADIO_JINGLES_DIR_PATH, self.programme.jingles_diretory)))
+            path = path_join(RADIO_JINGLES_DIR_PATH, self.programme.jingles_diretory, str(file_name))
+        else:
+            only_files = [f for f in os.listdir(RADIO_JINGLES_DIR_PATH) if isfile(path_join(RADIO_JINGLES_DIR_PATH, f))]
+            file_name = random.choice(only_files)
+            path = path_join(RADIO_JINGLES_DIR_PATH, str(file_name))
 
         result = await player.node.get_tracks(path)
         tracks = result['tracks']
         if tracks:
-            lava_track = lavalink.models.AudioTrack(tracks[0], self.bot.user.id, recommended=True)
-            player.add(requester=self.bot.user.id, track=lava_track)
+            player.add(requester=self.bot.user.id, track=tracks[0])
 
     async def load_playlist(self, player, query: str, to_list: list) -> None:
         query = query.strip('<>')
@@ -77,6 +178,12 @@ class Music(commands.Cog):
         with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
                 await self.load_playlist(player, line.replace('\n', ''), to_list)
+
+    async def load_programme_playlist_from_file(self, player) -> None:
+        if not self.programme:
+            return
+
+        await self.load_playlist_from_file(player, self.programme.playlists_file_name, self.tracks_programme)
 
     async def load_all_playlists_from_files(self, player) -> None:
         await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_HIGH_PRIORITY, self.tracks_high)
@@ -108,6 +215,20 @@ class Music(commands.Cog):
         async with self.bot.db.acquire() as connection:
             async with connection.transaction():
                 await self.bot.db.execute(query, user_id, requests)
+
+    def check_current_programme(self) -> None:
+        if self.programme:
+            if self.programme.should_be_active():
+                return
+            else:
+                self.bot.log.info(f"Programme {self.programme.title} has ended")
+                self.programme = None
+                self.tracks_programme = []
+
+        for prog in self.all_programmes:
+            if prog.should_be_active():
+                self.programme = prog
+                self.bot.log.info(f"Programme {self.programme.title} has started")
 
     @tasks.loop(minutes=1)
     async def radio_stats_minutes_loop(self) -> None:
@@ -151,27 +272,37 @@ class Music(commands.Cog):
     @tasks.loop(seconds=1)
     async def radio_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
+
+        self.check_current_programme()
+        current_programme = self.programme
         
         for player in players:
-            if not self.tracks_high:
-                await self.load_all_playlists_from_files(player)
-                break
+            if current_programme:
+                if not self.tracks_programme:
+                    await self.load_programme_playlist_from_file(player)
+                    break
+            else:
+                if not self.tracks_high:
+                    await self.load_all_playlists_from_files(player)
+                    break
             
             if player.is_connected and len(player.queue) == 0:
-                if random.randint(1, 2) != 1:
-                    track = random.choice(self.tracks_high)
-                elif random.randint(1, 2) != 1:
-                    track = random.choice(self.tracks_medium)
-                else:
-                    track = random.choice(self.tracks_low)
-                
-                # They still might be being fetched right now
-                if not track:
+                try:
+                    if current_programme:
+                        track = random.choice(self.tracks_programme)
+                    else:
+                        if random.randint(1, 2) != 1:
+                            track = random.choice(self.tracks_high)
+                        elif random.randint(1, 2) != 1:
+                            track = random.choice(self.tracks_medium)
+                        else:
+                            track = random.choice(self.tracks_low)
+                except IndexError:
+                    # Happens when something is still loading
                     continue
                 
-                lava_track = lavalink.models.AudioTrack(track, self.bot.user.id, recommended=True)
-                player.add(requester=self.bot.user.id, track=lava_track)
-                self.bot.log.info(f"Added track to auto queue {lava_track.title}")
+                player.add(requester=self.bot.user.id, track=track)
+                self.bot.log.info(f"Added track to auto queue {track['info']['title']}")
 
                 jingle_counter = player.fetch(key='jingle', default=-1)
                 if jingle_counter <= 0:
@@ -403,6 +534,9 @@ class Music(commands.Cog):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         skip_track = player.current
+        if not skip_track:
+            await player.skip()
+            return await ctx.send('\u23e9')
 
         if await self.bot.is_owner(ctx.author):
             await player.skip()
@@ -574,14 +708,24 @@ class Music(commands.Cog):
             duration = '\ud83d\udd34 LIVE'
         else:
             duration = lavalink.utils.format_time(player.current.duration)
-        song = (
-            f'**[{player.current.title}]({player.current.uri})**'
+        
+        now_playing_info = (
+            f'\ud83c\udfb5 **[{player.current.title}]({player.current.uri})**'
             f'\n\ud83d\udc64 <@{player.current.requester}>'
-            f'\n\u23f2\ufe0f {position}/{duration}'
+            f'\n\u23f0 {position}/{duration}'
+            '\n\n**\ud83d\udd34 Pašlaik radio ēterā:**\n'
         )
 
-        embed = discord.Embed(color=13110502,
-                              title='\u25b6\ufe0f Tagad skan', description=song)
+        if not self.programme:
+            now_playing_info += "**Parastā dziesmu rotācija** - Galvenais radio playlist. \ud83d\udd04"
+        else:
+            programme = self.programme
+            now_playing_info += f"**{programme.title}** - {programme.description}."
+
+        embed = discord.Embed(color=16717068,
+                              title='\u25b6\ufe0f Tagad skan', description=now_playing_info)
+        embed.set_footer(text="Radio programma: Apskati ar komandu /programma")
+        
         await ctx.send(embed=embed)
 
     @cog_ext.cog_slash(name="now", description="\ud83c\udfb5 Parāda dziesmu, kas pašlaik tiek atskaņota")
@@ -648,8 +792,12 @@ class Music(commands.Cog):
         self.tracks_low = []
         self.tracks_medium = []
         self.tracks_high = []
-
-        await self.load_all_playlists_from_files(player)
+        self.tracks_programme = []
+        
+        if self.programme:
+            await self.load_programme_playlist_from_file(player)
+        else:
+            await self.load_all_playlists_from_files(player)
 
         await ctx.message.add_reaction('\u2705')
 
@@ -686,7 +834,10 @@ class Music(commands.Cog):
             title=f"\ud83d\udcca {target_member} radio statistika"
         )
         days, hours, minutes = self.minutes_to_days(user_data["listening_minutes"])
-        embed.add_field(name="\ud83d\udd50 Klausīšanās ilgums", value=f"{days} dienas {hours} stundas {minutes} minūtes")
+        embed.add_field(
+            name="\ud83d\udd50 Klausīšanās ilgums",
+            value=f"{days} dienas {hours} stundas {minutes} minūtes"
+        )
         embed.add_field(name="\ud83c\udfb6 Pasūtītās dziesmas", value=f"{user_data['song_requests']}")
 
         await ctx.send(embed=embed)
@@ -767,6 +918,64 @@ class Music(commands.Cog):
     async def top(self, ctx):
         """ \ud83c\udfc6 Apskati lojālākos radio klausītājus """
         await self.view_top_users(ctx)
+
+    async def view_radio_programmes(self, ctx):
+        if not self.all_programmes:
+            return await ctx.send("\u274c Nav radio programmu")
+
+        embed = discord.Embed(
+            title="\ud83d\udcf0 Radio programma",
+            color=16777200
+        )
+
+        int_to_days = {
+            0 : "Pirmdiena",
+            1 : "Otrdiena",
+            2 : "Trešdiena",
+            3 : "Ceturdiena",
+            4 : "Piektdiena",
+            5 : "Sestdiena",
+            6 : "Svētdiena"
+        }
+
+        embed.description = ""
+        for prog in self.all_programmes:
+            embed.description += f"**{prog.title}** - {prog.description}.\n"
+            for play_time in prog.play_times:
+                start_time = play_time.start_time
+                end_time = play_time.end_time
+    
+                start_time_str = f"{start_time.tm_hour}:{start_time.tm_min}"
+                if start_time.tm_min == 0:
+                    start_time_str += '0'
+                end_time_str = f"{end_time.tm_hour}:{end_time.tm_min}"
+                    
+                if end_time.tm_min == 0:
+                    end_time_str += '0'
+
+                start_day_name = int_to_days[start_time.tm_wday]
+                if start_time.tm_wday == end_time.tm_wday:
+                    embed.description += f"{start_day_name} {start_time_str} - {end_time_str}\n"
+                else:
+                    end_day_name = int_to_days[end_time.tm_wday]
+                    embed.description += f"{start_day_name} {start_time_str} - {end_day_name} {end_time_str}\n"
+
+        await ctx.send(embed=embed)
+
+    @cog_ext.cog_slash(
+        name="programma",
+        description="\ud83d\udcf0 Apskati radio programmu"
+    )
+    async def slash_programme(self, ctx: SlashContext):
+        if not await self.ensure_slash_voice(ctx):
+            return
+        
+        await self.view_radio_programmes(ctx)
+    
+    @commands.command()
+    async def programma(self, ctx):
+        """ \ud83d\udcf0 Apskati radio programmu """
+        await self.view_radio_programmes(ctx)
 
 
 def setup(bot):
