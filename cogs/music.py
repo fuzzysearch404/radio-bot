@@ -133,10 +133,10 @@ class Music(commands.Cog):
 
         self.programme = None
         
-        self.tracks_programme = []
-        self.tracks_low = []
-        self.tracks_medium = []
-        self.tracks_high = []
+        self.tracks_programme = {}
+        self.tracks_low = {}
+        self.tracks_medium = {}
+        self.tracks_high = {}
 
     async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
@@ -162,7 +162,7 @@ class Music(commands.Cog):
         if tracks:
             player.add(requester=self.bot.user.id, track=tracks[0])
 
-    async def load_playlist(self, player, query: str, to_list: list) -> None:
+    async def load_playlist(self, player, query: str, to_set: set) -> None:
         query = query.strip('<>')
 
         if not URL_REGX.match(query):
@@ -172,12 +172,12 @@ class Music(commands.Cog):
         results = await player.node.get_tracks(query)
 
         tracks = results['tracks']
-        to_list.extend(tracks)
+        to_set.update(tracks)
 
-    async def load_playlist_from_file(self, player, filename: str, to_list: list) -> None:
+    async def load_playlist_from_file(self, player, filename: str, to_set: set) -> None:
         with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
-                await self.load_playlist(player, line.replace('\n', ''), to_list)
+                await self.load_playlist(player, line.replace('\n', ''), to_set)
 
     async def load_programme_playlist_from_file(self, player) -> None:
         if not self.programme:
@@ -223,7 +223,7 @@ class Music(commands.Cog):
             else:
                 self.bot.log.info(f"Programme {self.programme.title} has ended")
                 self.programme = None
-                self.tracks_programme = []
+                self.tracks_programme.clear()
 
         for prog in self.all_programmes:
             if prog.should_be_active():
@@ -789,10 +789,10 @@ class Music(commands.Cog):
         """ Reloads all auto queue playlists """
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
         
-        self.tracks_low = []
-        self.tracks_medium = []
-        self.tracks_high = []
-        self.tracks_programme = []
+        self.tracks_low.clear()
+        self.tracks_medium.clear()
+        self.tracks_high.clear()
+        self.tracks_programme.clear()
         
         if self.programme:
             await self.load_programme_playlist_from_file(player)
