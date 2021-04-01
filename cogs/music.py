@@ -12,7 +12,6 @@ directory.
 You can use comments in the playlist files if the line starts
 with a "#" symbol.
 """
-from operator import ne
 import re
 import os
 import discord
