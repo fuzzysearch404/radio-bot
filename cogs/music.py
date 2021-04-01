@@ -9,7 +9,10 @@ For example: .jingles/programme
 Playlists:
 Playlists have to be stored in text files under ./playlists
 directory.
+You can use comments in the playlist files if the line starts
+with a "#" symbol.
 """
+from operator import ne
 import re
 import os
 import discord
@@ -18,6 +21,7 @@ import asyncio
 import random
 import math
 import time
+import typing
 from os.path import isfile
 from os.path import join as path_join
 from dataclasses import dataclass
@@ -32,8 +36,11 @@ URL_REGX = re.compile(r'https?://(?:www\.)?.+')
 
 USER_QUEUE_REQUESTS_LIMIT = 6
 SONG_REQUEST_MAX_LENGHT_MILIS = 600000
+SONG_PLAYER_MAX_LENGHT_MILIS = 600000
 
 RADIO_JINGLES_DIR_PATH = './jingles'
+JINGLES_MIN_INTERVAL = 2
+JINGLES_MAX_INTERVAL = 3
 
 PLAYLISTS_DIR_PATH = './playlists'
 # Default playlists
@@ -70,6 +77,22 @@ class ProgrammePlayTime:
 
         return False
 
+    def occurs_next(self) -> int:
+        start_time = self.convert_time(self.start_time)
+        now = self.convert_time(time.localtime())
+
+        if start_time > now:
+            day_mins = (start_time[0] - now[0]) * 1440 # 1440 minutes per day
+            
+            return  day_mins + (start_time[1] - now[1])
+        elif start_time < now:
+            # Shift start day by 7 days
+            day_mins = (start_time[0] + 7 - now[0]) * 1440 # 1440 minutes per day
+
+            return  day_mins + (start_time[1] - now[1])
+        else:
+            return 0
+
 
 @dataclass
 class RadioProgramme:
@@ -79,10 +102,10 @@ class RadioProgramme:
     playlists_file_name: str
     jingles_diretory: str
 
-    def should_be_active(self) -> bool:
+    def should_be_active(self) -> typing.Union[bool, ProgrammePlayTime]:
         for play_time in self.play_times:
             if play_time.is_now():
-                return True
+                return play_time
 
         return False
 
@@ -91,52 +114,202 @@ class Music(commands.Cog):
     def __init__(self, bot) -> None:
         super().__init__()
         self.bot = bot
+        # If we are currently loading some auto queue tracks
+        self.loading_tracks = False
         self.bot.loop.create_task(self.attach_lavalink())
-        self.radio_loop.start()
-        self.radio_stats_minutes_loop.start()
+        
         self.all_programmes = (
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Monday 23:00", "Tuesday 5:00"),
-                    ProgrammePlayTime("Tuesday 23:00", "Wednesday 5:00"),
-                    ProgrammePlayTime("Wednesday 23:00", "Thursday 5:00"),
-                    ProgrammePlayTime("Thursday 23:00", "Friday 5:00")
+                    ProgrammePlayTime("Monday 12:00", "Monday 14:00"),
+                    ProgrammePlayTime("Tuesday 12:00", "Tuesday 14:00"),
+                    ProgrammePlayTime("Wednesday 12:00", "Wednesday 14:00"),
+                    ProgrammePlayTime("Thursday 12:00", "Thursday 14:00"),
+                    ProgrammePlayTime("Friday 12:00", "Friday 14:00"),
+                    ProgrammePlayTime("Saturday 12:00", "Saturday 14:00"),
+                    ProgrammePlayTime("Sunday 12:00", "Sunday 14:00")
                 ],
-                title="LoFi bītu vakars",
-                description="Atpūties. Nomierinoša mūzika tavam darba dienas vakaram",
-                playlists_file_name="lofi.txt",
+                title="Tikai hiti",
+                description="Klausies tikai un vienīgi pašlaik vispopulārāko mūziku \ud83d\udd1d",
+                playlists_file_name="hits.txt",
+                jingles_diretory="hits"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 23:00", "Tuesday 4:00"),
+                    ProgrammePlayTime("Tuesday 23:00", "Wednesday 4:00"),
+                    ProgrammePlayTime("Wednesday 23:00", "Thursday 4:00"),
+                    ProgrammePlayTime("Thursday 23:00", "Friday 4:00"),
+                    ProgrammePlayTime("Sunday 23:00", "Monday 4:00")
+                ],
+                title="Chillout bītu vakars",
+                description="Atpūties. Nomierinoša mūzika tavam darba dienas vakaram \ud83d\ude34",
+                playlists_file_name="chill.txt",
+                jingles_diretory="chill"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 9:30", "Monday 10:30"),
+                    ProgrammePlayTime("Wednesday 9:30", "Wednesday 10:30"),
+                    ProgrammePlayTime("Friday 9:30", "Friday 10:30"),
+                    ProgrammePlayTime("Sunday 16:00", "Sunday 18:00")
+                ],
+                title="Throwback / Nostalģija",
+                description="Mūzika, kura nekad nenovecos, nu, vismaz pagaidām nē \ud83d\udc74",
+                playlists_file_name="throwback.txt",
+                jingles_diretory="throwback"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Tuesday 9:30", "Tuesday 10:30"),
+                    ProgrammePlayTime("Thursday 9:30", "Thursday 10:30"),
+                    ProgrammePlayTime("Saturday 16:00", "Saturday 18:00")
+                ],
+                title="Disko mašīna",
+                description="Mūzika no 70., 80., 90. gadiem - deju grīda ir tava \ud83d\udd7a",
+                playlists_file_name="disco.txt",
+                jingles_diretory="disco"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 19:00", "Monday 20:30"),
+                    ProgrammePlayTime("Thursday 19:00", "Thursday 20:30")
+                ],
+                title="General special: slowed+reverb",
+                description="General īpašā programma: slowed+reverb edition \ud83d\udd25",
+                playlists_file_name="slowed.txt",
+                jingles_diretory="special"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Tuesday 19:00", "Tuesday 20:30"),
+                    ProgrammePlayTime("Friday 19:00", "Friday 20:30")
+                ],
+                title="General special: Phonk",
+                description="General īpašā programma: Phonk edition \ud83d\udd25",
+                playlists_file_name="phonk.txt",
+                jingles_diretory="special"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Friday 22:00", "Saturday 6:00"),
+                    ProgrammePlayTime("Saturday 22:00", "Sunday 6:00")
+                ],
+                title="Party Mix",
+                description="Tava nedēļas nogales ballīte ir šeit \ud83e\udd73",
+                playlists_file_name="party.txt",
+                jingles_diretory="party"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Saturday 8:00", "Saturday 10:30"),
+                    ProgrammePlayTime("Sunday 8:00", "Sunday 10:30")
+                ],
+                title="Celies augšā!",
+                description="Nav ko gulēt brīvdienās - enerģiska mūzika, lai pamostos \ud83e\udd29",
+                playlists_file_name="energy.txt",
+                jingles_diretory="energy"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Wednesday 19:00", "Wednesday 21:00")
+                ],
+                title="Latviešu mūzikas trešdienas",
+                description="Klausamies vietējo mūziku \ud83c\uddf1\ud83c\uddfb",
+                playlists_file_name="latvian.txt",
+                jingles_diretory="latvian"
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Monday 16:00", "Monday 17:00")
+                ],
+                title="Dienas skaņa: Indie",
+                description="TIkai un vienīgi indie mūzika \ud83c\udfd5\ufe0f",
+                playlists_file_name="indie.txt",
                 jingles_diretory=None
             ),
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Monday 12:00", "Monday 14:00"),
-                    ProgrammePlayTime("Wednesday 12:00", "Wednesday 14:00"),
-                    ProgrammePlayTime("Friday 12:00", "Friday 14:00")
+                    ProgrammePlayTime("Tuesday 16:00", "Tuesday 17:00")
                 ],
-                title="Tikai hiti",
-                description="Klausies tikai un vienīgi pašlaik vispopulārāko mūziku",
-                playlists_file_name="top.txt",
+                title="Dienas skaņa: Rock/Metal",
+                description="TIkai un vienīgi rokmūzika/metāls \ud83c\udfb8",
+                playlists_file_name="rock.txt",
                 jingles_diretory=None
-            )
-            ,
+            ),
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Tuesday 12:00", "Tuesday 14:00"),
-                    ProgrammePlayTime("Thursday 12:00", "Thursday 14:00")
+                    ProgrammePlayTime("Wednesday 16:00", "Wednesday 17:00")
                 ],
-                title="Disko mašīna",
-                description="Mūzika no 70., 80., 90. gadiem",
-                playlists_file_name="disco.txt",
+                title="Dienas skaņa: Hip Hop",
+                description="TIkai un vienīgi hip hops/reps \ud83c\udf99\ufe0f",
+                playlists_file_name="hiphop.txt",
+                jingles_diretory=None
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Thursday 16:00", "Thursday 17:00")
+                ],
+                title="Dienas skaņa: Jazz",
+                description="TIkai un vienīgi džezs \ud83c\udfb7",
+                playlists_file_name="jazz.txt",
+                jingles_diretory=None
+            ),
+            RadioProgramme(
+                play_times = [
+                    ProgrammePlayTime("Friday 16:00", "Friday 17:00")
+                ],
+                title="Dienas skaņa: EDM",
+                description="TIkai un vienīgi elektroniskā deju mūzika \ud83d\udc6f",
+                playlists_file_name="edm.txt",
                 jingles_diretory=None
             )
         )
 
-        self.programme = None
+        # Current programme and current playtime for programme
+        self.programme, self.programme_play_time = None, None
+        # Next up
+        self.nearest_programme, self.nearest_play_time = None, None
         
         self.tracks_programme = []
         self.tracks_low = []
         self.tracks_medium = []
         self.tracks_high = []
+
+        self.radio_loop.start()
+        self.radio_stats_minutes_loop.start()
+
+
+    def format_programme_playtime_to_string(self, play_time: ProgrammePlayTime) -> str:
+        int_to_days = {
+            0 : "Pirmdiena",
+            1 : "Otrdiena",
+            2 : "Trešdiena",
+            3 : "Ceturdiena",
+            4 : "Piektdiena",
+            5 : "Sestdiena",
+            6 : "Svētdiena"
+        }
+
+        start_time = play_time.start_time
+        end_time = play_time.end_time
+
+        start_time_str = f"{start_time.tm_hour}:{start_time.tm_min}"
+        if start_time.tm_min == 0:
+            start_time_str += '0'
+        end_time_str = f"{end_time.tm_hour}:{end_time.tm_min}"
+            
+        if end_time.tm_min == 0:
+            end_time_str += '0'
+
+        start_day_name = int_to_days[start_time.tm_wday]
+        if start_time.tm_wday == end_time.tm_wday:
+
+            return f"{start_day_name} {start_time_str} - {end_time_str}\n"
+        else:
+            end_day_name = int_to_days[end_time.tm_wday]
+
+            return f"{start_day_name} {start_time_str} - {end_day_name} {end_time_str}\n"
 
     async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
@@ -153,6 +326,7 @@ class Music(commands.Cog):
             file_name = random.choice(os.listdir(path_join(RADIO_JINGLES_DIR_PATH, self.programme.jingles_diretory)))
             path = path_join(RADIO_JINGLES_DIR_PATH, self.programme.jingles_diretory, str(file_name))
         else:
+            # The jingle folder has subdirectories for programme jingles
             only_files = [f for f in os.listdir(RADIO_JINGLES_DIR_PATH) if isfile(path_join(RADIO_JINGLES_DIR_PATH, f))]
             file_name = random.choice(only_files)
             path = path_join(RADIO_JINGLES_DIR_PATH, str(file_name))
@@ -175,9 +349,17 @@ class Music(commands.Cog):
         to_list.extend(tracks)
 
     async def load_playlist_from_file(self, player, filename: str, to_list: list) -> None:
+        self.loading_tracks = True
+        
         with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
-                await self.load_playlist(player, line.replace('\n', ''), to_list)
+                if not line.startswith('#') and line != '\n':
+                    await self.load_playlist(player, line.replace('\n', ''), to_list)
+
+                    # Slow load - to lower the chance to get rate limited?
+                    await asyncio.sleep(random.randint(2, 4))
+
+        self.loading_tracks = False
 
     async def load_programme_playlist_from_file(self, player) -> None:
         if not self.programme:
@@ -189,6 +371,41 @@ class Music(commands.Cog):
         await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_HIGH_PRIORITY, self.tracks_high)
         await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_MEDIUM_PRIORITY, self.tracks_medium)
         await self.load_playlist_from_file(player, PLAYLIST_FILE_NAME_LOW_PRIORITY, self.tracks_low)
+
+    def find_next_programme_and_play_time(self) -> tuple:
+        nearest_prog, nearest_play_time = None, None
+        for prog in self.all_programmes:
+            for play_time in prog.play_times:
+                occurs_next = play_time.occurs_next()
+                if occurs_next == 0:
+                    # Not really next, it is current by now
+                    continue
+
+                if not nearest_prog:
+                    nearest_prog, nearest_play_time = prog, play_time
+                    continue
+
+                if occurs_next < nearest_play_time.occurs_next():
+                    nearest_prog, nearest_play_time = prog, play_time
+
+        return nearest_prog, nearest_play_time
+
+    def check_current_programme(self) -> None:
+        self.nearest_programme, self.nearest_play_time = self.find_next_programme_and_play_time()
+
+        if self.programme:
+            if self.programme.should_be_active():
+                return
+            else:
+                self.bot.log.info(f"Programme {self.programme.title} has ended")
+                self.programme, self.programme_play_time = None, None
+                self.tracks_programme = []
+
+        for prog in self.all_programmes:
+            play_time = prog.should_be_active()
+            if play_time:
+                self.programme, self.programme_play_time = prog, play_time
+                self.bot.log.info(f"Programme {self.programme.title} has started")
 
     async def stats_give_users_listen_minutes(self, user_ids_minutes: list) -> None:
         query = """
@@ -215,20 +432,6 @@ class Music(commands.Cog):
         async with self.bot.db.acquire() as connection:
             async with connection.transaction():
                 await self.bot.db.execute(query, user_id, requests)
-
-    def check_current_programme(self) -> None:
-        if self.programme:
-            if self.programme.should_be_active():
-                return
-            else:
-                self.bot.log.info(f"Programme {self.programme.title} has ended")
-                self.programme = None
-                self.tracks_programme = []
-
-        for prog in self.all_programmes:
-            if prog.should_be_active():
-                self.programme = prog
-                self.bot.log.info(f"Programme {self.programme.title} has started")
 
     @tasks.loop(minutes=1)
     async def radio_stats_minutes_loop(self) -> None:
@@ -274,31 +477,35 @@ class Music(commands.Cog):
         players = self.bot.lavalink.player_manager.find_all()
 
         self.check_current_programme()
-        current_programme = self.programme
-        
+
         for player in players:
-            if current_programme:
-                if not self.tracks_programme:
-                    await self.load_programme_playlist_from_file(player)
-                    break
-            else:
-                if not self.tracks_high:
-                    await self.load_all_playlists_from_files(player)
-                    break
+            if not self.loading_tracks:
+                if self.programme:
+                    if not self.tracks_programme:
+                        await self.load_programme_playlist_from_file(player)
+                        break
+                else:
+                    if not self.tracks_high:
+                        await self.load_all_playlists_from_files(player)
+                        break
             
             if player.is_connected and len(player.queue) == 0:
                 try:
-                    if current_programme:
+                    if self.programme:
                         track = random.choice(self.tracks_programme)
                     else:
-                        if random.randint(1, 2) != 1:
+                        if random.randint(1, 10) > 4: # 60% chance to stay
                             track = random.choice(self.tracks_high)
-                        elif random.randint(1, 2) != 1:
+                        elif random.randint(1, 10) > 3: # 70% chance to stay
                             track = random.choice(self.tracks_medium)
                         else:
                             track = random.choice(self.tracks_low)
                 except IndexError:
                     # Happens when something is still loading
+                    continue
+
+                if track['info']['isStream'] or track['info']['length'] > SONG_PLAYER_MAX_LENGHT_MILIS:
+                    # Track too long, redraw another.
                     continue
                 
                 player.add(requester=self.bot.user.id, track=track)
@@ -308,9 +515,9 @@ class Music(commands.Cog):
                 if jingle_counter <= 0:
                     await self.load_jingle(player)
                     self.bot.log.info("Loaded jingle to auto queue")
-                    player.store(key='jingle', value=random.randint(2, 3))
+                    player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
                 else:
-                    player.store(key='jingle', value=jingle_counter-1)
+                    player.store(key='jingle', value=jingle_counter - 1)
 
             if not player.is_connected:
                 self.bot.log.error("Found that player is not connected. Trying to reconnect")
@@ -493,7 +700,7 @@ class Music(commands.Cog):
             return await ctx.send("\u274c Nevaru atrast neko vai arī kaut kas nokāries, bruh.")
         
         if not is_owner:
-            if track['info']['length'] > SONG_REQUEST_MAX_LENGHT_MILIS:
+            if track['info']['isStream'] or track['info']['length'] > SONG_REQUEST_MAX_LENGHT_MILIS:
                 return await ctx.send("\u23f0 Šī dziesma ir pārāk gara... (10mins max)")
 
         embed.title = '\u2705 Dziesma pievienota queue!'
@@ -512,7 +719,7 @@ class Music(commands.Cog):
         if jingle_counter <= 0:
             await self.load_jingle(player)
             self.bot.log.info('Loaded jingle to queue')
-            player.store(key='jingle', value=random.randint(2, 3))
+            player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
         else:
             player.store(key='jingle', value=jingle_counter-1)
 
@@ -713,14 +920,23 @@ class Music(commands.Cog):
             f'\ud83c\udfb5 **[{player.current.title}]({player.current.uri})**'
             f'\n\ud83d\udc64 <@{player.current.requester}>'
             f'\n\u23f0 {position}/{duration}'
-            '\n\n**\ud83d\udd34 Pašlaik radio ēterā:**\n'
+            '\n\n\ud83d\udd34 Pašlaik radio ēterā: '
         )
 
         if not self.programme:
-            now_playing_info += "**Parastā dziesmu rotācija** - Galvenais radio playlist. \ud83d\udd04"
+            now_playing_info += "**Parastā dziesmu rotācija**\nGalvenais radio playlist. \ud83d\udd04"
         else:
             programme = self.programme
-            now_playing_info += f"**{programme.title}** - {programme.description}."
+            current_play_time_str = self.format_programme_playtime_to_string(self.programme_play_time)
+            now_playing_info += f"**{programme.title}**\n{current_play_time_str}{programme.description}"
+
+        nearest = self.nearest_programme
+        if nearest:
+            next_play_time_str = self.format_programme_playtime_to_string(self.nearest_play_time)
+            now_playing_info += (
+                f"\n\n\u23ed\ufe0f Turpinājumā: **{nearest.title}**"
+                f"\n{next_play_time_str}{nearest.description}"
+            )
 
         embed = discord.Embed(color=16717068,
                               title='\u25b6\ufe0f Tagad skan', description=now_playing_info)
@@ -928,39 +1144,13 @@ class Music(commands.Cog):
             color=16777200
         )
 
-        int_to_days = {
-            0 : "Pirmdiena",
-            1 : "Otrdiena",
-            2 : "Trešdiena",
-            3 : "Ceturdiena",
-            4 : "Piektdiena",
-            5 : "Sestdiena",
-            6 : "Svētdiena"
-        }
-
         programmes_to_display = []
         embed.description = ''
 
         for prog in self.all_programmes:
-            programme_str = f"**{prog.title}** - {prog.description}.\n"
+            programme_str = f"**{prog.title}** - {prog.description}\n"
             for play_time in prog.play_times:
-                start_time = play_time.start_time
-                end_time = play_time.end_time
-    
-                start_time_str = f"{start_time.tm_hour}:{start_time.tm_min}"
-                if start_time.tm_min == 0:
-                    start_time_str += '0'
-                end_time_str = f"{end_time.tm_hour}:{end_time.tm_min}"
-                    
-                if end_time.tm_min == 0:
-                    end_time_str += '0'
-
-                start_day_name = int_to_days[start_time.tm_wday]
-                if start_time.tm_wday == end_time.tm_wday:
-                    programme_str += f"{start_day_name} {start_time_str} - {end_time_str}\n"
-                else:
-                    end_day_name = int_to_days[end_time.tm_wday]
-                    programme_str += f"{start_day_name} {start_time_str} - {end_day_name} {end_time_str}\n"
+                programme_str += self.format_programme_playtime_to_string(play_time)
             
             programmes_to_display.append(programme_str)
 
