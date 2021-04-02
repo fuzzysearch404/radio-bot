@@ -720,7 +720,7 @@ class Music(commands.Cog):
             self.bot.log.info('Loaded jingle to queue')
             player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
         else:
-            player.store(key='jingle', value=jingle_counter-1)
+            player.store(key='jingle', value=jingle_counter - 1)
 
         await self.stats_give_user_song_request(ctx.author.id, 1)
 
@@ -815,7 +815,8 @@ class Music(commands.Cog):
 
         queue_to_display = []
         for track in player.queue:
-            if track.title != "Unknown title":
+            # Don't add local files
+            if URL_REGX.match(track.uri):
                 queue_to_display.append(track)
 
         if not queue_to_display:
@@ -1018,11 +1019,17 @@ class Music(commands.Cog):
 
     @commands.is_owner()
     @commands.command()
-    async def clear(self, ctx):
-        """ Clears the whole queue. """
+    async def clear(self, ctx, index: int = 0):
+        """ Clears the whole queue or remove any specific track """
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
-        player.queue.clear()
+        if not index:
+            player.queue.clear()
+        else:
+            try:
+                del player.queue[index - 1]
+            except IndexError:
+                pass
 
         await ctx.message.add_reaction('\u2705')
 
