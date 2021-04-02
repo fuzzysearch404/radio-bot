@@ -225,7 +225,7 @@ class Music(commands.Cog):
                 title="Dienas skaņa: Indie",
                 description="TIkai un vienīgi indie mūzika \ud83c\udfd5\ufe0f",
                 playlists_file_name="indie.txt",
-                jingles_diretory=None
+                jingles_diretory="genre"
             ),
             RadioProgramme(
                 play_times = [
@@ -234,7 +234,7 @@ class Music(commands.Cog):
                 title="Dienas skaņa: Rock/Metal",
                 description="TIkai un vienīgi rokmūzika/metāls \ud83c\udfb8",
                 playlists_file_name="rock.txt",
-                jingles_diretory=None
+                jingles_diretory="genre"
             ),
             RadioProgramme(
                 play_times = [
@@ -243,7 +243,7 @@ class Music(commands.Cog):
                 title="Dienas skaņa: Hip Hop",
                 description="TIkai un vienīgi hip hops/reps \ud83c\udf99\ufe0f",
                 playlists_file_name="hiphop.txt",
-                jingles_diretory=None
+                jingles_diretory="genre"
             ),
             RadioProgramme(
                 play_times = [
@@ -252,7 +252,7 @@ class Music(commands.Cog):
                 title="Dienas skaņa: Jazz",
                 description="TIkai un vienīgi džezs \ud83c\udfb7",
                 playlists_file_name="jazz.txt",
-                jingles_diretory=None
+                jingles_diretory="genre"
             ),
             RadioProgramme(
                 play_times = [
@@ -261,7 +261,7 @@ class Music(commands.Cog):
                 title="Dienas skaņa: EDM",
                 description="TIkai un vienīgi elektroniskā deju mūzika \ud83d\udc6f",
                 playlists_file_name="edm.txt",
-                jingles_diretory=None
+                jingles_diretory="genre"
             )
         )
 
