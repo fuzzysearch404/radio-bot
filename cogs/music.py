@@ -328,7 +328,7 @@ class Music(commands.Cog):
             self.bot.lavalink.add_node('127.0.0.1', 2333, 'youshallnotpass', 'eu', 'default-node')  # Host, Port, Password, Region, Name
             self.bot.add_listener(self.bot.lavalink.voice_update_handler, 'on_socket_response')
 
-            self.bot.lavalink.add_event_hook(self.track_hook)
+        self.bot.lavalink.add_event_hook(self.track_hook)
 
     async def load_jingle(self, player) -> None:
         if self.programme and self.programme.jingles_diretory:
