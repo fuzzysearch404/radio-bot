@@ -333,7 +333,7 @@ class Music(commands.Cog):
         result = await player.node.get_tracks(path)
         tracks = result['tracks']
         if tracks:
-            player.add(requester=self.bot.user.id, track=tracks[0])
+            player.add(requester=self.bot.user.id, track=tracks[0], index=0)
 
     async def load_playlist(self, player, query: str, to_list: list) -> None:
         query = query.strip('<>')
@@ -510,14 +510,6 @@ class Music(commands.Cog):
                 player.add(requester=self.bot.user.id, track=track)
                 self.bot.log.info(f"Added track to auto queue {track['info']['title']}")
 
-                jingle_counter = player.fetch(key='jingle', default=-1)
-                if jingle_counter <= 0:
-                    await self.load_jingle(player)
-                    self.bot.log.info("Loaded jingle to auto queue")
-                    player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
-                else:
-                    player.store(key='jingle', value=jingle_counter - 1)
-
             if not player.is_connected:
                 self.bot.log.error("Found that player is not connected. Trying to reconnect")
                 chan_id = player.fetch(key=f'chan:{player.guild_id}', default=0)
@@ -642,7 +634,16 @@ class Music(commands.Cog):
 
     async def track_hook(self, event):
         if isinstance(event, lavalink.events.TrackEndEvent):
+            # Remove skip votes
             event.player.delete(key='skips')
+            # Handle jingles
+            jingle_counter = event.player.fetch(key='jingle', default=-1)
+            if jingle_counter <= 1:
+                await self.load_jingle(event.player)
+                self.bot.log.info("Loaded jingle to queue")
+                event.player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
+            else:
+                event.player.store(key='jingle', value=jingle_counter - 1)
         elif isinstance(event, lavalink.events.QueueEndEvent):
             self.radio_loop.restart()
         elif isinstance(event, lavalink.events.TrackStuckEvent):
@@ -713,14 +714,6 @@ class Music(commands.Cog):
         # the current track.
         if not player.is_playing:
             await player.play()
-
-        jingle_counter = player.fetch(key='jingle', default=-1)
-        if jingle_counter <= 0:
-            await self.load_jingle(player)
-            self.bot.log.info('Loaded jingle to queue')
-            player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
-        else:
-            player.store(key='jingle', value=jingle_counter - 1)
 
         await self.stats_give_user_song_request(ctx.author.id, 1)
 
