@@ -511,7 +511,6 @@ class Music(commands.Cog):
                 self.bot.log.info(f"Added track to auto queue {track['info']['title']}")
 
             if not player.is_connected:
-                self.bot.log.error("Found that player is not connected. Trying to reconnect")
                 chan_id = player.fetch(key=f'chan:{player.guild_id}', default=0)
                 
                 if chan_id:
@@ -524,6 +523,7 @@ class Music(commands.Cog):
                         chans = await guild.fetch_channels()
                         chan = next(x for x in chans if x.id == chan_id)
                     
+                    self.bot.log.error("Found that player is not connected. Trying to reconnect")
                     await guild.change_voice_state(channel=chan)
 
             if player.is_connected and not player.is_playing and not player.paused:
@@ -592,7 +592,8 @@ class Music(commands.Cog):
             player.store('channel', ctx.channel.id)
             await ctx.guild.change_voice_state(channel=ctx.author.voice.channel)
 
-            player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
+            if ctx.author.voice and ctx.author.voice.channel:
+                player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
             if int(player.channel_id) != ctx.author.voice.channel.id:
                 raise commands.CommandInvokeError('\ud83e\udd21 Tev vajag būt manā voice channel.')
