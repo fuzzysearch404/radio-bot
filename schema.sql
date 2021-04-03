@@ -7,7 +7,9 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO radi
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO radiobot;
 
 CREATE TABLE IF NOT EXISTS public.radio_stats(
-    userid bigint PRIMARY KEY,
+    user_id bigint PRIMARY KEY,
+    guild_id bigint NOT NULL,
     listening_minutes integer DEFAULT 0,
-    song_requests integer DEFAULT 0
+    song_requests integer DEFAULT 0,
+    radio_stats_pkey PRIMARY KEY (user_id, guild_id)
 );

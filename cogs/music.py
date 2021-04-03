@@ -406,31 +406,31 @@ class Music(commands.Cog):
                 self.programme, self.programme_play_time = prog, play_time
                 self.bot.log.info(f"Programme {self.programme.title} has started")
 
-    async def stats_give_users_listen_minutes(self, user_ids_minutes: list) -> None:
+    async def stats_give_users_listen_minutes(self, ids_and_minutes: list) -> None:
         query = """
-                INSERT INTO radio_stats(userid, listening_minutes)
-                VALUES ($1, $2) ON CONFLICT (userid)
+                INSERT INTO radio_stats(user_id, guild_id, listening_minutes)
+                VALUES ($1, $2, $3) ON CONFLICT (user_id, guild_id)
                 DO UPDATE
-                SET listening_minutes = radio_stats.listening_minutes + $2;
+                SET listening_minutes = radio_stats.listening_minutes + $3;
                 """
 
         async with self.bot.db.acquire() as connection:
             async with connection.transaction():
-                # List of tuples with user ids and minutes
-                await self.bot.db.executemany(query, user_ids_minutes)
+                # List of tuples with user ids, guild ids and minutes
+                await self.bot.db.executemany(query, ids_and_minutes)
 
 
-    async def stats_give_user_song_request(self, user_id: int, requests: int) -> None:
+    async def stats_give_user_song_request(self, user_id: int, guild_id: int, requests: int) -> None:
         query = """
-                INSERT INTO radio_stats(userid, song_requests)
-                VALUES ($1, $2) ON CONFLICT (userid)
+                INSERT INTO radio_stats(user_id, guild_id, song_requests)
+                VALUES ($1, $2, $3) ON CONFLICT (user_id, guild_id)
                 DO UPDATE
-                SET song_requests = radio_stats.song_requests + $2;
+                SET song_requests = radio_stats.song_requests + $3;
                 """
 
         async with self.bot.db.acquire() as connection:
             async with connection.transaction():
-                await self.bot.db.execute(query, user_id, requests)
+                await self.bot.db.execute(query, user_id, guild_id, requests)
 
     @tasks.loop(minutes=1)
     async def radio_stats_minutes_loop(self) -> None:
@@ -466,7 +466,7 @@ class Music(commands.Cog):
                         continue
                     
                     if not voice_state.self_deaf and not voice_state.deaf:
-                        db_data_rows.append((member.id, 1))
+                        db_data_rows.append((member.id, guild.id, 1))
 
         if db_data_rows:
             await self.stats_give_users_listen_minutes(db_data_rows)
@@ -715,7 +715,7 @@ class Music(commands.Cog):
         if not player.is_playing:
             await player.play()
 
-        await self.stats_give_user_song_request(ctx.author.id, 1)
+        await self.stats_give_user_song_request(ctx.author.id, ctx.guild.id, 1)
 
     @cog_ext.cog_slash(name="play", description="\u25b6\ufe0f Pasūtīt dziesmu radio")
     async def slash_play(self, ctx: SlashContext, dziesma: str):
@@ -964,7 +964,7 @@ class Music(commands.Cog):
 
         await ctx.send(f"\ud83e\uddf9 Ok, izņēmu tavu pēdējo pasūtīto dziesmu **{to_remove.title}** no queue.")
         
-        await self.stats_give_user_song_request(ctx.author.id, -1)
+        await self.stats_give_user_song_request(ctx.author.id, ctx.guild.id, -1)
 
     @cog_ext.cog_slash(
         name="remove",
@@ -1037,10 +1037,11 @@ class Music(commands.Cog):
 
         query = """
                 SELECT * FROM radio_stats
-                WHERE userid = $1;
+                WHERE user_id = $1
+                AND guild_id = $2;
                 """
         
-        user_data = await self.bot.db.fetchrow(query, target_member.id)
+        user_data = await self.bot.db.fetchrow(query, target_member.id, ctx.guild.id)
         if not user_data:
             return await ctx.send(f"\u274c **{target_member}** nav klausījies/-usies radio. :(")
 
@@ -1075,18 +1076,20 @@ class Music(commands.Cog):
     async def do_view_top_users(self, ctx):
         query_minutes = """
                 SELECT * FROM radio_stats
+                WHERE guild_id = $1
                 ORDER BY listening_minutes DESC
                 LIMIT 8;
                 """
 
         query_requests = """
                 SELECT * FROM radio_stats
+                WHERE guild_id = $1
                 ORDER BY song_requests DESC
                 LIMIT 8;
                 """
 
-        top_minutes = await self.bot.db.fetch(query_minutes)
-        top_requests = await self.bot.db.fetch(query_requests)
+        top_minutes = await self.bot.db.fetch(query_minutes, ctx.guild.id)
+        top_requests = await self.bot.db.fetch(query_requests, ctx.guild.id)
 
         embed = discord.Embed(
             color=16173112,
@@ -1096,7 +1099,7 @@ class Music(commands.Cog):
         embed.description = "\ud83d\udd50 **Klausīšanās ilgums:**"
         if top_minutes:
             for top_data in top_minutes:
-                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['userid'])
+                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['user_id'])
                 if user:
                     username = user.name + '#' + user.discriminator
                 else:
@@ -1108,7 +1111,7 @@ class Music(commands.Cog):
         embed.description += "\n\n\ud83c\udfb6 **Pasūtītās dziesmas:**"
         if top_requests:
             for top_data in top_requests:
-                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['userid'])
+                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['user_id'])
                 if user:
                     username = user.name + '#' + user.discriminator
                 else:
