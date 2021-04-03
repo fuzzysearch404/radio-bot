@@ -31,16 +31,26 @@ from discord_slash import SlashContext
 
 from .utils import convertors
 
+
 URL_REGX = re.compile(r'https?://(?:www\.)?.+')
 
+# Default user queue limit
 USER_QUEUE_REQUESTS_LIMIT = 6
+# User queue limit when programme is active
+USER_QUEUE_REQUESTS_LIMIT_PROGRAMME = 3
+# Max. track lenght in milis for user requests
 SONG_REQUEST_MAX_LENGHT_MILIS = 600000
+# Max. track lenght in milis for auto queue
 SONG_PLAYER_MAX_LENGHT_MILIS = 600000
 
+# Root folder for storing jingles
 RADIO_JINGLES_DIR_PATH = './jingles'
+# Min. tracks between jingle playbacks
 JINGLES_MIN_INTERVAL = 2
+# Max. tracks between jingle playbacks
 JINGLES_MAX_INTERVAL = 3
 
+# Directory for playlist text files
 PLAYLISTS_DIR_PATH = './playlists'
 # Default playlists
 PLAYLIST_FILE_NAME_HIGH_PRIORITY = 'high-priority.txt'
@@ -663,10 +673,12 @@ class Music(commands.Cog):
 
         user_song_count_in_queue = sum(1 for x in player.queue if x.requester == ctx.author.id)
         if not is_owner:
-            if user_song_count_in_queue >= USER_QUEUE_REQUESTS_LIMIT:
+            allowed_song_count = USER_QUEUE_REQUESTS_LIMIT_PROGRAMME if self.programme else USER_QUEUE_REQUESTS_LIMIT
+
+            if user_song_count_in_queue >= allowed_song_count:
                 return await ctx.send(
                     "\u231b Tu esi sasniedzis maksimālo pasūtīto dziesmu "
-                    f"limitu queue (**{USER_QUEUE_REQUESTS_LIMIT}** dziesmas). "
+                    f"limitu queue (**{allowed_song_count}** dziesmas). "
                     "Pagaidi, līdz izskan kāda no tavām dziesmām, lai arī citi "
                     "var pasūtīt savas dziesmas.")
 
