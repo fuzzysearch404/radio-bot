@@ -66,7 +66,7 @@ class ProgrammePlayTime:
         self.start_time = time.strptime(start_time, "%A %H:%M")
         self.end_time = time.strptime(end_time, "%A %H:%M")
 
-    def convert_time(self, tm):
+    def convert_time(self, tm) -> tuple:
         # Converts this to easily comparable tuple
         return tm.tm_wday, tm.tm_min + tm.tm_hour * 60
 
@@ -105,6 +105,9 @@ class ProgrammePlayTime:
 
 @dataclass
 class RadioProgramme:
+
+    __slots__ = ('play_times', 'title', 'description', 'playlists_file_name', 'jingles_diretory')
+
     play_times: list
     title: str
     description: str
