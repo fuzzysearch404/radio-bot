@@ -638,7 +638,7 @@ class Music(commands.Cog):
             event.player.delete(key='skips')
             # Handle jingles
             jingle_counter = event.player.fetch(key='jingle', default=-1)
-            if jingle_counter <= 1:
+            if jingle_counter <= 0:
                 await self.load_jingle(event.player)
                 self.bot.log.info("Loaded jingle to queue")
                 event.player.store(key='jingle', value=random.randint(JINGLES_MIN_INTERVAL, JINGLES_MAX_INTERVAL))
