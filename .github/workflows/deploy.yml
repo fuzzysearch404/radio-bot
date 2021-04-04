@@ -16,5 +16,8 @@ jobs:
 
           script: |
             cd /root/radio-bot
+            echo 'Pulling repo from GitHub'
             git pull
+            echo 'Checking and updating pip packages'
+            python3.9 -m pip install -U -r requirements.txt
             echo 'Deployed to server.'
