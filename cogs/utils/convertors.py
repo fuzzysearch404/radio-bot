@@ -1,6 +1,6 @@
 
 
-async def get_fetch_member(bot, guild, user_id):
+async def get_fetch_member(guild, user_id):
     member = guild.get_member(user_id)
     if not member:
         member = await guild.fetch_member(user_id)

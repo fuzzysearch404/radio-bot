@@ -1,3 +1,7 @@
+"""
+This cog contains code snippets from:
+https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/admin.py
+"""
 import io
 import time
 import textwrap
@@ -151,6 +155,7 @@ class Admin(commands.Cog):
         await self.bot.remove_from_blacklist(userid)
 
         await ctx.send('\N{OK HAND SIGN}')
+
 
 def setup(bot):
     bot.add_cog(Admin(bot))

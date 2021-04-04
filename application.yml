@@ -1,3 +1,5 @@
+# This is a configuration file for Lavalink
+
 server: # REST and WS server
   port: 2333
   address: 0.0.0.0
@@ -40,7 +42,7 @@ sentry:
 logging:
   file:
     max-history: 30
-    max-size: 250MB
+    max-size: 50MB
   path: ./logs/
 
   level:

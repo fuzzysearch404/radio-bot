@@ -1,3 +1,7 @@
+"""
+This cog contains code snippets from:
+https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/utils/config.py
+"""
 import json
 import os
 import uuid

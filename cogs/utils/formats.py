@@ -1,3 +1,8 @@
+"""
+This cog contains code snippets from:
+https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/utils/formats.py
+"""
+
 class plural:
     def __init__(self, value):
         self.value = value

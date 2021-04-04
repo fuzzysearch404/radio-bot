@@ -1,0 +1,15 @@
+.vscode
+
+__pycache__
+
+/logs
+/jingles
+/playlists
+/cogs/status.py
+
+bot_config.py
+Lavalink.jar
+blacklist.json
+slash_test.py
+
+*log

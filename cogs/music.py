@@ -1,16 +1,48 @@
 """
-Requires intents for members and voice states.
+This discord.py cog simulates real radio station in Discord voice channels.
+But in reality, it is just a regular Discord music bot.
+Relies on Lavalink and Lavalink.py
+
+Features:
+    - Quite dynamic, easily customazible
+    - Scheduled radio programmes in different week days/hours
+    - Regular auto queue when no radio programmes are playing
+    - Jingles for auto queue and personalizable per radio programme
+    - Default queue with 3 priority type playlists
+    - User song requests
+    - Auto reconnect/fix handling, when possible and detected
+    - Admin controls for managing the radio
+    - Supports Stage channels
+    - User participation activity stats
+    - Slash commands
+Requires:
+    - Intents for guilds, members and voice states.
+    - Lavalink set up and running
+    - Lavalink.py (https://github.com/Devoxin/Lavalink.py/)
+    - PostgreSQL database running with schema.sql set up for stats
+    - asyncpg (pip install -U asyncpg)
+    - discord_slash (temp., while discord.py does not support them)
+      (pip install -U discord-py-slash-command)
+    - ./jingles directory with jingle sound files
+    - ./jingles/ subdirectories for jingles per programmes
+    - ./playlists directory with playlist lists text files
+    - Configuaration in this cog
 
 Jingles:
 Regular jingles have to be stored in directory: ./jingles
 Radio programme jingle directories under ./jingles
-For example: .jingles/programme
+For example: .jingles/programme/
 
 Playlists:
 Playlists have to be stored in text files under ./playlists
 directory.
-You can use comments in the playlist files if the line starts
+You can use comments in the playlist files if the comment line starts
 with a "#" symbol.
+
+This cog is NOT recommended and NOT optimized for large, public hosting.
+
+This cog was built on top of this example by https://github.com/fuzzysearch404:
+https://github.com/Devoxin/Lavalink.py/blob/master/examples/music.py
 """
 import re
 import os
@@ -287,6 +319,7 @@ class Music(commands.Cog):
         # Next up
         self.nearest_programme, self.nearest_play_time = None, None
         
+        # Here we store the loaded Lavalink.py track objects
         self.tracks_programme = []
         self.tracks_low = []
         self.tracks_medium = []
@@ -369,6 +402,7 @@ class Music(commands.Cog):
         
         with open(PLAYLISTS_DIR_PATH + '/' + filename, 'r') as playl:
             for line in playl.readlines():
+                # Allow commenting
                 if not line.startswith('#') and line != '\n':
                     await self.load_playlist(player, line.replace('\n', ''), to_list)
 
@@ -820,7 +854,7 @@ class Music(commands.Cog):
                     f"Vēl nepieciešamas **{required_votes - votes}** balsis!"
                 )
 
-        requester = await convertors.get_fetch_member(self.bot, ctx.guild, skip_track.requester)
+        requester = await convertors.get_fetch_member(ctx.guild, skip_track.requester)
         
         await ctx.send(f"\u23e9 Skipojam `{requester}` pasūtīto dziesmu: **{skip_track.title}**!")
 
@@ -1010,7 +1044,7 @@ class Music(commands.Cog):
         player = self.bot.lavalink.player_manager.get(ctx.guild.id)
 
         if not player.queue:
-            return await ctx.send("\u274c Queue ir jau pavisam tukšs")
+            return await ctx.send("\u274c Queue jau ir pavisam tukšs")
 
         try:
             to_remove = next(x for x in reversed(player.queue) if x.requester == ctx.author.id)
@@ -1156,7 +1190,7 @@ class Music(commands.Cog):
         embed.description = "\ud83d\udd50 **Klausīšanās ilgums:**"
         if top_minutes:
             for top_data in top_minutes:
-                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['user_id'])
+                user = await convertors.get_fetch_member(ctx.guild, top_data['user_id'])
                 if user:
                     username = user.name + '#' + user.discriminator
                 else:
@@ -1168,7 +1202,7 @@ class Music(commands.Cog):
         embed.description += "\n\n\ud83c\udfb6 **Pasūtītās dziesmas:**"
         if top_requests:
             for top_data in top_requests:
-                user = await convertors.get_fetch_member(self.bot, ctx.guild, top_data['user_id'])
+                user = await convertors.get_fetch_member(ctx.guild, top_data['user_id'])
                 if user:
                     username = user.name + '#' + user.discriminator
                 else:
