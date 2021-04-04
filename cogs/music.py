@@ -57,6 +57,10 @@ PLAYLIST_FILE_NAME_HIGH_PRIORITY = 'high-priority.txt'
 PLAYLIST_FILE_NAME_MEDIUM_PRIORITY = 'medium-priority.txt'
 PLAYLIST_FILE_NAME_LOW_PRIORITY = 'low-priority.txt'
 
+# Information when no programme is currently active
+NO_PROGRAMME_TITLE = "Parastā dziesmu rotācija"
+NO_PROGRAMME_DESCRIPTION = "Galvenais radio playlist. \ud83d\udd04"
+
 
 class ProgrammePlayTime:
 
@@ -402,7 +406,32 @@ class Music(commands.Cog):
 
         return nearest_prog, nearest_play_time
 
-    def check_current_programme(self) -> None:
+    async def change_stage_channel_topic(self, guild_id: int):      
+        guild = await convertors.get_fetch_guild(self.bot, guild_id)
+        if not guild:
+            return
+
+        if guild.me.voice and guild.me.voice.channel:
+            channel = guild.me.voice.channel
+        else:
+            return
+
+        if not isinstance(channel, discord.StageChannel):
+            return
+
+        if not self.programme:
+            description = f"{NO_PROGRAMME_TITLE} \ud83d\udd04"
+        else:
+            current_playtime = self.format_programme_playtime_to_string(self.programme_play_time)
+            description = f"{self.programme.title} \ud83d\udcfb {current_playtime}"
+
+        if channel.permissions_for(guild.me).manage_channels:
+            await channel.edit(
+                topic=description,
+                reason="[RADIO] Automatic current programme change"
+            )
+
+    async def check_current_programme(self) -> None:
         self.nearest_programme, self.nearest_play_time = self.find_next_programme_and_play_time()
 
         if self.programme:
@@ -413,11 +442,19 @@ class Music(commands.Cog):
                 self.programme, self.programme_play_time = None, None
                 self.tracks_programme = []
 
+                players = self.bot.lavalink.player_manager.find_all()
+                for player in players:
+                    await self.change_stage_channel_topic(int(player.guild_id))
+
         for prog in self.all_programmes:
             play_time = prog.should_be_active()
             if play_time:
                 self.programme, self.programme_play_time = prog, play_time
                 self.bot.log.info(f"Programme {self.programme.title} has started")
+
+                players = self.bot.lavalink.player_manager.find_all()
+                for player in players:
+                    await self.change_stage_channel_topic(int(player.guild_id))
 
     async def stats_give_users_listen_minutes(self, ids_and_minutes: list) -> None:
         query = """
@@ -457,18 +494,13 @@ class Music(commands.Cog):
             if not guild:
                 continue # RIP?
 
-            bot_member = guild.me
-            if not bot_member:
-                bot_member = await convertors.get_fetch_member(self.bot, guild, self.bot.user.id)
-                if not bot_member:
-                    continue # RIP?
-
-            bot_voice_state = bot_member.voice
-            if not bot_voice_state:
+            if guild.me.voice and guild.me.voice.channel:
+                channel = guild.me.voice.channel
+            else:
                 self.bot.log.error(f"Can't get my voice state for guild {player.guild_id}")
                 continue
             
-            for member in bot_voice_state.channel.members:
+            for member in channel.members:
                 if member.id in self.bot.blacklist:
                     continue
 
@@ -488,7 +520,7 @@ class Music(commands.Cog):
     async def radio_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
 
-        self.check_current_programme()
+        await self.check_current_programme()
 
         for player in players:
             if not self.loading_tracks:
@@ -530,14 +562,17 @@ class Music(commands.Cog):
                     guild = await convertors.get_fetch_guild(self.bot, int(player.guild_id))
                     if not guild:
                         continue
-                    
+
                     chan = guild.get_channel(chan_id)
                     if not chan:
-                        chans = await guild.fetch_channels()
-                        chan = next(x for x in chans if x.id == chan_id)
-                    
+                        chan = await self.bot.fetch_channel(chan_id)
+
                     self.bot.log.error("Found that player is not connected. Trying to reconnect")
                     await guild.change_voice_state(channel=chan)
+
+                    if isinstance(chan, discord.StageChannel):
+                        if chan.permissions_for(guild.me).manage_channels:
+                            await guild.me.edit(suppress=False)
 
             if player.is_connected and not player.is_playing and not player.paused:
                 self.bot.log.error("Found that player is not playing. Trying to restart playback")
@@ -605,6 +640,9 @@ class Music(commands.Cog):
             player.store('channel', ctx.channel.id)
             await ctx.guild.change_voice_state(channel=ctx.author.voice.channel)
 
+            if isinstance(ctx.author.voice.channel, discord.StageChannel) and permissions.manage_channels:
+                await ctx.guild.me.edit(suppress=False)
+
             if ctx.author.voice and ctx.author.voice.channel:
                 player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
@@ -637,6 +675,9 @@ class Music(commands.Cog):
 
             player.store('channel', ctx.channel.id)
             await ctx.guild.change_voice_state(channel=ctx.author.voice.channel)
+
+            if isinstance(ctx.author.voice.channel, discord.StageChannel) and permissions.manage_channels:
+                await ctx.guild.me.edit(suppress=False)
 
             player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
@@ -842,7 +883,7 @@ class Music(commands.Cog):
             user = ctx.guild.get_member(track.requester)
             queue_list += f'`{index + 1}.` [**{track.title}**]({track.uri}) - {user.mention}\n'
 
-        embed = discord.Embed(colour=789734,
+        embed = discord.Embed(colour=discord.Color.random(),
                               description=f'**\ud83d\uddc3\ufe0f {len(queue_to_display)} dziesmas**\n\n{queue_list}')
         embed.set_footer(text=f'Lapa {page}/{pages}')
         await ctx.send(embed=embed)
@@ -933,7 +974,7 @@ class Music(commands.Cog):
         )
 
         if not self.programme:
-            now_playing_info += "**Parastā dziesmu rotācija**\nGalvenais radio playlist. \ud83d\udd04"
+            now_playing_info += f"**{NO_PROGRAMME_TITLE}**\n{NO_PROGRAMME_DESCRIPTION}"
         else:
             programme = self.programme
             current_play_time_str = self.format_programme_playtime_to_string(self.programme_play_time)
@@ -1062,7 +1103,7 @@ class Music(commands.Cog):
             return await ctx.send(f"\u274c **{target_member}** nav klausījies/-usies radio. :(")
 
         embed = discord.Embed(
-            color=16137269,
+            color=discord.Color.random(),
             title=f"\ud83d\udcca {target_member} radio statistika"
         )
         days, hours, minutes = self.minutes_to_days(user_data["listening_minutes"])
