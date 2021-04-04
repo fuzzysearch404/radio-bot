@@ -1,0 +1,20 @@
+name: Deploy to production server
+on: 
+  push:
+    branches:
+      - master
+jobs:
+  deploy_code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy changes to production server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{secrets.SSH_HOST}}
+          key: ${{secrets.SSH_KEY}}
+          username: ${{secrets.SSH_USERNAME}}
+
+          script: |
+          cd /root/radio-bot
+          git pull
+          echo 'Deployed to server.'
