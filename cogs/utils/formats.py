@@ -80,3 +80,4 @@ class TabularData:
 
         to_draw.append(sep)
         return '\n'.join(to_draw)
+    
