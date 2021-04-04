@@ -15,6 +15,6 @@ jobs:
           username: ${{secrets.SSH_USERNAME}}
 
           script: |
-          cd /root/radio-bot
-          git pull
-          echo 'Deployed to server.'
+            cd /root/radio-bot
+            git pull
+            echo 'Deployed to server.'
