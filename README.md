@@ -24,7 +24,7 @@ Built with [discord.py](https://github.com/Rapptz/discord.py) and [Lavalink](htt
 * `./jingles` directory with jingle sound files  
 * `./jingles/` subdirectories for jingles per programmes  
 * `./playlists` directory with playlist lists text files  
-* Configuaration in this cog  
+* Configuration in `Music` cog  
 
 ### Extra notes:
 1) This bot is **NOT** recommended and **NOT** optimized for large, public hosting.  
