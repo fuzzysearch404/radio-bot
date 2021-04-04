@@ -8,7 +8,7 @@ Features:
     - Scheduled radio programmes in different week days/hours
     - Regular auto queue when no radio programmes are playing
     - Jingles for auto queue and personalizable per radio programme
-    - Default queue with 3 priority type playlists
+    - Default queue with 3 priority type playlist lists
     - User song requests
     - Auto reconnect/fix handling, when possible and detected
     - Admin controls for managing the radio
