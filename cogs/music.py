@@ -197,9 +197,9 @@ class Music(commands.Cog):
             ),
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Monday 9:30", "Monday 10:30"),
-                    ProgrammePlayTime("Wednesday 9:30", "Wednesday 10:30"),
-                    ProgrammePlayTime("Friday 9:30", "Friday 10:30"),
+                    ProgrammePlayTime("Monday 9:30", "Monday 11:00"),
+                    ProgrammePlayTime("Wednesday 9:30", "Wednesday 11:00"),
+                    ProgrammePlayTime("Friday 9:30", "Friday 11:00"),
                     ProgrammePlayTime("Sunday 16:00", "Sunday 18:00")
                 ],
                 title="Throwback / Nostalģija",
@@ -209,8 +209,8 @@ class Music(commands.Cog):
             ),
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Tuesday 9:30", "Tuesday 10:30"),
-                    ProgrammePlayTime("Thursday 9:30", "Thursday 10:30"),
+                    ProgrammePlayTime("Tuesday 9:30", "Tuesday 11:00"),
+                    ProgrammePlayTime("Thursday 9:30", "Thursday 11:00"),
                     ProgrammePlayTime("Saturday 16:00", "Saturday 18:00")
                 ],
                 title="Disko mašīna",
@@ -250,8 +250,8 @@ class Music(commands.Cog):
             ),
             RadioProgramme(
                 play_times = [
-                    ProgrammePlayTime("Saturday 8:00", "Saturday 10:30"),
-                    ProgrammePlayTime("Sunday 8:00", "Sunday 10:30")
+                    ProgrammePlayTime("Saturday 8:00", "Saturday 11:00"),
+                    ProgrammePlayTime("Sunday 8:00", "Sunday 11:00")
                 ],
                 title="Celies augšā!",
                 description="Nav ko gulēt brīvdienās - enerģiska mūzika, lai pamostos \ud83e\udd29",
