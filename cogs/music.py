@@ -74,10 +74,9 @@ USER_QUEUE_REQUESTS_LIMIT_PROGRAMME = 3
 SONG_REQUEST_MAX_LENGHT_MILIS = 600000
 # Max. track lenght in milis for auto queue
 SONG_PLAYER_MAX_LENGHT_MILIS = 600000
-# After played, the track will be on cooldown and will
-# not appear in auto queue until this amount of 
-# other tracks will be played first. Note that you need all
-# playlists to contain atleast this amount of tracks. 
+# After played in auto queue, the track will be on cooldown and won't appear 
+# in auto queue until this amount of other tracks are played first. 
+# Note: You need all playlist lists to contain atleast this amount of tracks
 SONG_AUTO_QUEUE_PLAY_COOLDOWN = 50
 
 # Root folder for storing jingles
