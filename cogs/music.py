@@ -74,6 +74,11 @@ USER_QUEUE_REQUESTS_LIMIT_PROGRAMME = 3
 SONG_REQUEST_MAX_LENGHT_MILIS = 600000
 # Max. track lenght in milis for auto queue
 SONG_PLAYER_MAX_LENGHT_MILIS = 600000
+# After played, the track will be on cooldown and will
+# not appear in auto queue until this amount of 
+# other tracks will be played first. Note that you need all
+# playlists to contain atleast this amount of tracks. 
+SONG_AUTO_QUEUE_PLAY_COOLDOWN = 50
 
 # Root folder for storing jingles
 RADIO_JINGLES_DIR_PATH = './jingles'
@@ -329,7 +334,8 @@ class Music(commands.Cog):
         self.radio_stats_minutes_loop.start()
 
 
-    def format_programme_playtime_to_string(self, play_time: ProgrammePlayTime) -> str:
+    @staticmethod
+    def format_programme_playtime_to_string(play_time: ProgrammePlayTime) -> str:
         int_to_days = {
             0 : "Pirmdiena",
             1 : "Otrdiena",
@@ -516,6 +522,21 @@ class Music(commands.Cog):
             async with connection.transaction():
                 await self.bot.db.execute(query, user_id, guild_id, requests)
 
+    @staticmethod
+    def is_track_on_cooldown(player: lavalink.BasePlayer, track: dict) -> bool:
+        return track['info']['identifier'] in player.fetch(key='cd', default=[])
+
+    @staticmethod
+    def update_cooldown(player: lavalink.BasePlayer, track: dict) -> None:
+        current_cooldowns = player.fetch(key='cd', default=[])
+        
+        if len(current_cooldowns) >= SONG_AUTO_QUEUE_PLAY_COOLDOWN:
+            current_cooldowns.pop(0)
+        
+        current_cooldowns.append(track['info']['identifier'])
+
+        player.store(key='cd', value=current_cooldowns)    
+
     @tasks.loop(minutes=1)
     async def radio_stats_minutes_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
@@ -585,6 +606,11 @@ class Music(commands.Cog):
                 if track['info']['isStream'] or track['info']['length'] > SONG_PLAYER_MAX_LENGHT_MILIS:
                     # Track too long, redraw another.
                     continue
+
+                if self.is_track_on_cooldown(player, track):
+                    continue
+
+                self.update_cooldown(player, track)
                 
                 player.add(requester=self.bot.user.id, track=track)
                 self.bot.log.info(f"Added track to auto queue {track['info']['title']}")
