@@ -1118,6 +1118,8 @@ class Music(commands.Cog):
         self.tracks_medium = []
         self.tracks_high = []
         self.tracks_programme = []
+
+        await ctx.message.add_reaction('\u231b')
         
         if self.programme:
             await self.load_programme_playlist_from_file(player)
