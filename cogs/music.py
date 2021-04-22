@@ -339,7 +339,7 @@ class Music(commands.Cog):
             0 : "Pirmdiena",
             1 : "Otrdiena",
             2 : "Trešdiena",
-            3 : "Ceturdiena",
+            3 : "Ceturtdiena",
             4 : "Piektdiena",
             5 : "Sestdiena",
             6 : "Svētdiena"
