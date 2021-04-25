@@ -493,6 +493,11 @@ class Music(commands.Cog):
 
                 players = self.bot.lavalink.player_manager.find_all()
                 for player in players:
+                    # Remove our old queued track if there is one and there are no other requests.
+                    # This allows the auto DJ to play programme tracks a bit faster.
+                    if len(player.queue == 1) and player.queue[0].requester == self.bot.id:
+                        player.queue.clear()
+
                     await self.change_stage_channel_topic(int(player.guild_id))
 
     async def stats_give_users_listen_minutes(self, ids_and_minutes: list) -> None:
@@ -694,7 +699,7 @@ class Music(commands.Cog):
             permissions = ctx.author.voice.channel.permissions_for(ctx.me)
 
             if not permissions.connect or not permissions.speak:  # Check user limit too?
-                raise commands.CommandInvokeError('\u274c Man vajag `CONNECT` un `SPEAK` permissions.')
+                raise commands.CommandInvokeError('\u274c Man nepieciešami `CONNECT` un `SPEAK` permissions.')
 
             player.store('channel', ctx.channel.id)
             await ctx.guild.change_voice_state(channel=ctx.author.voice.channel)
@@ -706,7 +711,7 @@ class Music(commands.Cog):
                 player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
             if int(player.channel_id) != ctx.author.voice.channel.id:
-                raise commands.CommandInvokeError('\ud83e\udd21 Tev vajag būt manā voice channel.')
+                raise commands.CommandInvokeError('\ud83e\udd21 Tev ir jābūt manā voice channel.')
 
     async def ensure_slash_voice(self, ctx) -> bool:
         """ This check ensures that the bot and command author are in the same voicechannel. """
@@ -729,7 +734,7 @@ class Music(commands.Cog):
             permissions = ctx.author.voice.channel.permissions_for(ctx.guild.me)
 
             if not permissions.connect or not permissions.speak:  # Check user limit too?
-                await ctx.send('\u274c Man vajag `CONNECT` un `SPEAK` permissions.', hidden=True)
+                await ctx.send('\u274c Man nepieciešami `CONNECT` un `SPEAK` permissions.', hidden=True)
                 return False
 
             player.store('channel', ctx.channel.id)
@@ -741,7 +746,7 @@ class Music(commands.Cog):
             player.store(key=f'chan:{ctx.guild.id}', value=ctx.author.voice.channel.id)
         else:
             if int(player.channel_id) != ctx.author.voice.channel.id:
-                await ctx.send('\ud83e\udd21 Tev vajag būt manā voice channel.', hidden=True)
+                await ctx.send('\ud83e\udd21 Tev ir jabūt manā voice channel.', hidden=True)
                 return False
 
         return True
