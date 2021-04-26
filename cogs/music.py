@@ -495,7 +495,7 @@ class Music(commands.Cog):
                 for player in players:
                     # Remove our old queued track if there is one and there are no other requests.
                     # This allows the auto DJ to play programme tracks a bit faster.
-                    if len(player.queue) == 1 and player.queue[0].requester == self.bot.id:
+                    if len(player.queue) == 1 and player.queue[0].requester == self.bot.user.id:
                         player.queue.clear()
 
                     await self.change_stage_channel_topic(int(player.guild_id))
