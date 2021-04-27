@@ -577,7 +577,7 @@ class Music(commands.Cog):
         if db_data_rows:
             await self.stats_give_users_listen_minutes(db_data_rows)
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=1)
     async def radio_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
 
