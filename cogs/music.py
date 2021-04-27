@@ -368,9 +368,11 @@ class Music(commands.Cog):
     async def attach_lavalink(self) -> None:
         await self.bot.wait_until_ready()
 
-        if not hasattr(self.bot, 'lavalink'):  # This ensures the client isn't overwritten during cog reloads.
+        # This ensures the client isn't overwritten during cog reloads.
+        if not hasattr(self.bot, 'lavalink'):
             self.bot.lavalink = lavalink.Client(self.bot.user.id)
-            self.bot.lavalink.add_node('127.0.0.1', 2333, 'youshallnotpass', 'eu', 'default-node')  # Host, Port, Password, Region, Name
+            # Host, Port, Password, Region, Name
+            self.bot.lavalink.add_node('127.0.0.1', 2333, 'youshallnotpass', 'eu', 'default-node')
             self.bot.add_listener(self.bot.lavalink.voice_update_handler, 'on_socket_response')
 
         self.bot.lavalink.add_event_hook(self.track_hook)
@@ -531,7 +533,7 @@ class Music(commands.Cog):
         return track['info']['identifier'] in player.fetch(key='cd', default=[])
 
     @staticmethod
-    def update_cooldown(player: lavalink.BasePlayer, track: dict) -> None:
+    def update_track_cooldown(player: lavalink.BasePlayer, track: dict) -> None:
         current_cooldowns = player.fetch(key='cd', default=[])
         
         if len(current_cooldowns) >= SONG_AUTO_QUEUE_PLAY_COOLDOWN:
@@ -575,7 +577,7 @@ class Music(commands.Cog):
         if db_data_rows:
             await self.stats_give_users_listen_minutes(db_data_rows)
 
-    @tasks.loop(seconds=1)
+    @tasks.loop(seconds=5)
     async def radio_loop(self) -> None:
         players = self.bot.lavalink.player_manager.find_all()
 
@@ -583,14 +585,10 @@ class Music(commands.Cog):
 
         for player in players:
             if not self.loading_tracks:
-                if self.programme:
-                    if not self.tracks_programme:
-                        await self.load_programme_playlist_from_file(player)
-                        break
-                else:
-                    if not self.tracks_high:
-                        await self.load_all_playlists_from_files(player)
-                        break
+                if self.programme and not self.tracks_programme:
+                    self.bot.loop.create_task(self.load_programme_playlist_from_file(player))
+                elif not self.tracks_high:
+                    self.bot.loop.create_task(self.load_all_playlists_from_files(player))
             
             if player.is_connected and len(player.queue) == 0:
                 try:
@@ -614,7 +612,7 @@ class Music(commands.Cog):
                 if self.is_track_on_cooldown(player, track):
                     continue
 
-                self.update_cooldown(player, track)
+                self.update_track_cooldown(player, track)
                 
                 player.add(requester=self.bot.user.id, track=track)
                 self.bot.log.info(f"Added track to auto queue {track['info']['title']}")
@@ -638,13 +636,14 @@ class Music(commands.Cog):
                         if chan.permissions_for(guild.me).manage_channels:
                             await guild.me.edit(suppress=False)
 
-            if player.is_connected and not player.is_playing and not player.paused:
-                self.bot.log.error("Found that player is not playing. Trying to restart playback")
-                await player.play()
+            if not player.paused:
+                if player.is_connected and not player.is_playing:
+                    self.bot.log.error("Found that player is not playing. Trying to restart playback")
+                    await player.play()
 
-            if player.is_connected and not player.current:
-                self.bot.log.error("Found that player has no current track. Trying to skip")
-                await player.skip()
+                if player.is_connected and not player.current:
+                    self.bot.log.error("Found that player has no current track. Trying to skip")
+                    await player.skip()
 
     async def await_lavalink_attached(self) -> None:
         # Don't do anything before lavalink init
