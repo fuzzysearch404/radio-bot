@@ -27,7 +27,7 @@ INITIAL_COGS = (
 class BotClient(commands.Bot):
     def __init__(self, **kwargs) -> None:
         self.config = bot_config
-        
+
         super().__init__(
             intents=INTENTS,
             command_prefix=commands.when_mentioned_or('radio '),
@@ -35,17 +35,20 @@ class BotClient(commands.Bot):
             **kwargs
         )
 
+        format = logging.Formatter(
+            "[%(asctime)s %(name)s/%(levelname)s] %(message)s"
+        )
         log = logging.getLogger("radiobot")
         log.setLevel(logging.DEBUG)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(logging.Formatter("[%(asctime)s %(name)s/%(levelname)s] %(message)s"))
+        stream_handler = logging.StreamHandler(format)
+        stream_handler.setFormatter()
         rotating_handler = RotatingFileHandler(
-                f'radiobot.log',
+                'radiobot.log',
                 encoding='utf-8',
                 mode='a',
-                maxBytes=25 * 1024 * 1024
+                maxBytes=2 * 1024 * 1024
         )
-        rotating_handler.setFormatter(logging.Formatter("[%(asctime)s %(name)s/%(levelname)s] %(message)s"))
+        rotating_handler.setFormatter(format)
         log.handlers = [stream_handler, rotating_handler]
         self.log = log
 
@@ -98,19 +101,23 @@ class BotClient(commands.Bot):
         if isinstance(error, commands.errors.CommandNotFound):
             return
         elif isinstance(error, commands.errors.MissingRequiredArgument):
-            return await ctx.send(f"\u274c Komandai trūkst obligāts arguments: `{error.param}`")
+            return await ctx.send(
+                f"\u274c Komandai trūkst obligāts arguments: `{error.param}`"
+            )
         elif isinstance(error, commands.errors.BadArgument):
             return await ctx.send("\u274c Nederīgs komandas arguments")
         elif isinstance(error, commands.CommandInvokeError):
             original = error.original
             if not isinstance(original, discord.HTTPException):
-                self.log.critical(f'In {ctx.command.qualified_name}:')
-                self.log.critical(str(original))
-                self.log.critical(traceback.format_tb(original.__traceback__))
+                exc_info = (type(original), original, original.__traceback__)
+                self.log.error(
+                    f"In {ctx.command.qualified_name}:", exc_info=exc_info
+                )
         elif isinstance(error, commands.ArgumentParsingError):
             return await ctx.send(error)
         else:
-            self.log.critical(''.join(traceback.format_exception(type(error), error, error.__traceback__)))
+            exc_info = (type(error), error, error.__traceback__)
+            self.log.error("Exception occured: ", exc_info=exc_info)
 
     def on_error(self, event_method, *args, **kwargs):
         self.log.critical(traceback.format_exc())
