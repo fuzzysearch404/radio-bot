@@ -40,8 +40,8 @@ class BotClient(commands.Bot):
         )
         log = logging.getLogger("radiobot")
         log.setLevel(logging.DEBUG)
-        stream_handler = logging.StreamHandler(format)
-        stream_handler.setFormatter()
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(format)
         rotating_handler = RotatingFileHandler(
                 'radiobot.log',
                 encoding='utf-8',
