@@ -6,6 +6,7 @@ __pycache__
 /jingles
 /playlists
 /cogs/status.py
+/cogs/admin.py
 
 bot_config.py
 Lavalink.jar
